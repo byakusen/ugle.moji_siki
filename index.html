@@ -1,0 +1,3185 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>文字と式</title>
+<!--
+  ============================================================
+  6年算数「文字と式」第1版（2026-11-15）
+  もとにしたもの：計算アプリ ひな形1
+  タブ：式に表す／数をあてはめる／文章題／場面と式
+  のこした土台：タブと小タブ／手順の進め方（states）／テンキー／ヒント／
+               はなまる・紙吹雪・ピンポン／まちがいのブブー・ゆれ／連続正解／
+               10問チャレンジ／📝テストの練習（⓪①②）／もう一度
+  見本のタブ：①わり算の筆算（たてる・かける・ひく・おろす）
+             ②計算（式の答えを▢に入れる）
+  くわしくは「計算アプリ_ひな形1_引き継ぎメモ.md」
+  ============================================================
+-->
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+<style>
+    :root {
+        --primary-color: #fff500;
+        --hint-color: #4caf50;
+        --wrong-color: #ff5252;
+        --cell-size: 50px;
+    }
+
+    body {
+        min-height: 100vh;
+        margin: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+        font-family: 'M PLUS Rounded 1c', sans-serif;
+        touch-action: manipulation; /* ダブルタップズーム防止 */
+        overflow: hidden; /* スマホでの不意なスクロールを防止 */
+    }
+
+    #app-container {
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-radius: 20px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+        padding: 20px;
+        width: 98%;
+        max-width: 1040px; /* 10列グリッド＋右側にボタン・テンキー */
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    /* ===== 上のタブ ===== */
+    .settings {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 10px 8px;
+        background: #fff;
+        padding: 10px 12px;
+        border-radius: 12px;
+        box-shadow: inset 0 2px 5px rgba(0,0,0,0.05);
+        margin-bottom: 5px;
+    }
+    .tab-btn {
+        font-family: inherit;
+        font-size: 1.1rem;
+        font-weight: bold;
+        color: #6a5acd;
+        background: #eef0ff;
+        border: 2px solid #c9cdf5;
+        border-radius: 12px;
+        padding: 8px 14px;
+        cursor: pointer;
+        transition: all 0.15s;
+        box-shadow: 0 2px 0 #c9cdf5;
+    }
+    .tab-btn:hover { background: #e2e6ff; }
+    .tab-btn.active {
+        color: #fff;
+        background: #6a5acd;
+        border-color: #5a4abd;
+        box-shadow: 0 3px 0 #4a3aad;
+    }
+    /* タブの色のちがい（見本：オレンジ）。タブをふやすときは、この形で色を足す */
+    .tab-btn.kake-tab {
+        color: #e65100;
+        background: #fff3e0;
+        border-color: #ffcc80;
+        box-shadow: 0 2px 0 #ffcc80;
+    }
+    .tab-btn.kake-tab:hover { background: #ffe0b2; }
+    .tab-btn.kake-tab.active {
+        color: #fff;
+        background: #fb8c00;
+        border-color: #ef6c00;
+        box-shadow: 0 3px 0 #e65100;
+    }
+
+    /* ===== 小タブ（上のタブの下に出る） ===== */
+    .level-wrap {
+        display: none;
+        justify-content: center;
+        flex-wrap: wrap;
+        max-width: 96%;
+        gap: 8px;
+        width: fit-content;
+        margin: -15px auto 5px;
+        background: #fff;
+        border-radius: 12px;
+        padding: 5px 12px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    }
+    .level-btn {
+        font-size: 1rem;
+        padding: 6px 18px;
+        border-radius: 10px;
+        background: #e0f2f1;
+        color: #00796b;
+        border: 2px solid #80cbc4;
+        box-shadow: none;
+    }
+    .level-btn:hover { background: #b2dfdb; }
+    .level-btn.active {
+        background: #00897b;
+        color: #fff;
+        border-color: #00695c;
+    }
+    /* 「ランダム」だけピンクにして目立たせる */
+    .level-btn.random-btn {
+        background: #fce4ec;
+        color: #c2185b;
+        border-color: #f48fb1;
+    }
+    .level-btn.random-btn:hover { background: #f8bbd0; }
+    .level-btn.random-btn.active {
+        background: #e91e63;
+        color: #fff;
+        border-color: #ad1457;
+    }
+
+    /* おろすときの ↓ */
+    .guide-arrow {
+        position: absolute;
+        top: -35px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 2rem;
+        color: #ff9800;
+        pointer-events: none;
+        animation: bounceDown 1s infinite;
+        z-index: 50;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    @keyframes bounceDown {
+        0%, 100% { transform: translate(-50%, 0); }
+        50% { transform: translate(-50%, 10px); }
+    }
+    #combo-count {
+        display: inline-block;
+        transition: transform 0.2s;
+    }
+
+    /* 指示の文 */
+    .header {
+        text-align: center;
+        font-size: 1.4rem;
+        font-weight: bold;
+        color: #333;
+        min-height: 3rem;
+        background: #e1f5fe;
+        border-radius: 12px;
+        padding: 10px 20px;
+        box-shadow: inset 0 2px 5px rgba(0,0,0,0.05);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: wrap;
+        transition: opacity 0.3s;
+    }
+
+    .main-content {
+        display: flex;
+        flex-direction: row;
+        gap: 26px;
+        justify-content: flex-start;
+        align-items: flex-start;
+    }
+
+    @media (max-width: 600px) {
+        .main-content {
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+        .header {
+            font-size: 1.1rem;
+            min-height: 2.5rem;
+        }
+    }
+
+    /* ===== マス目エリア ===== */
+    .grid-wrapper {
+        background-color: white;
+        border: 2px solid #00bcd4;
+        border-radius: 8px;
+        padding: 0;
+        position: relative;
+        display: inline-block;
+        box-shadow: inset 0 0 10px rgba(0,188,212,0.2);
+        align-self: flex-start;
+    }
+
+    .grid {
+        display: grid;
+        grid-template-columns: repeat(10, var(--cell-size));
+        grid-template-rows: repeat(8, var(--cell-size));
+        gap: 0;
+        background-color: white;
+        background-image:
+            linear-gradient(to right, #b2ebf2 2px, transparent 2px),
+            linear-gradient(to bottom, #b2ebf2 2px, transparent 2px);
+        background-size: var(--cell-size) var(--cell-size);
+        background-position: 0 0;
+        border-radius: 6px;
+    }
+
+    .cell {
+        width: var(--cell-size);
+        height: var(--cell-size);
+        box-sizing: border-box;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 2.2rem;
+        font-weight: bold;
+        line-height: 1;
+        color: #333;
+        position: relative;
+        user-select: none;
+        transition: background-color 0.2s, transform 0.2s;
+    }
+
+    /* わり算の「）」を .paren-left が付いたセルの左端に重ねる */
+    .paren-left {
+        position: relative;
+        overflow: visible;
+    }
+    .paren-left::before {
+        content: ")";
+        position: absolute;
+        left: 0;
+        top: 46%;
+        transform: translate(-50%, -50%) scale(1, 1.25);
+        font-size: 2.2rem;
+        font-weight: bold;
+        line-height: 1;
+        color: #333;
+        pointer-events: none;
+    }
+
+    /* 筆算の線 */
+    .border-bottom { border-bottom: 3px solid #333; }
+    .border-hidden { border-color: transparent; }
+
+    /* 商の下線（かっこの上線）を少し下げる */
+    [id^="cell-r0-"].border-bottom {
+        border-bottom: none;
+    }
+    [id^="cell-r0-"]::after {
+        content: '';
+        position: absolute;
+        bottom: -8%;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background-color: #333;
+        display: none;
+        z-index: 10;
+    }
+    [id^="cell-r0-"].border-bottom::after {
+        display: block;
+    }
+
+    .fade-in { animation: cellFade 0.4s ease-out; }
+    @keyframes cellFade {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+
+    /* ===== 右のボタン ===== */
+    .controls {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-width: 118px;
+    }
+
+    button {
+        font-family: inherit;
+        font-size: 1.2rem;
+        padding: 12px 15px;
+        border: none;
+        border-radius: 10px;
+        background: linear-gradient(145deg, #f0f0f0, #cacaca);
+        box-shadow: 3px 3px 6px rgba(0,0,0,0.1), inset 1px 1px 2px rgba(255,255,255,0.8);
+        cursor: pointer;
+        font-weight: bold;
+        color: #333;
+        transition: transform 0.1s, box-shadow 0.1s, filter 0.2s;
+    }
+
+    button:active {
+        transform: translateY(2px);
+        box-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+    }
+
+    button.action-btn {
+        background: var(--primary-color);
+        border: 2px solid #e6c200;
+        box-shadow: 0 4px 0 #c4a600;
+    }
+    button.action-btn:active {
+        box-shadow: 0 0 0 #c4a600;
+        transform: translateY(4px);
+    }
+
+    button.hint-btn {
+        background: var(--hint-color);
+        color: white;
+        border: 2px solid #388e3c;
+        box-shadow: 0 4px 0 #2e7d32;
+    }
+    button.hint-btn:active {
+        box-shadow: 0 0 0 #2e7d32;
+        transform: translateY(4px);
+    }
+
+    button.reset-btn {
+        background: var(--wrong-color);
+        color: white;
+        border: 2px solid #d50000;
+        box-shadow: 0 4px 0 #b71c1c;
+        margin-top: auto;
+    }
+    button.reset-btn:active {
+        box-shadow: 0 0 0 #b71c1c;
+        transform: translateY(4px);
+    }
+
+    .hint-row { display: flex; gap: 8px; }
+    .hint-row > button { flex: 1; }
+
+    /* 計算タブ：たてる〜おろす は使わないので出さない（ヒントと もう一度 はのこす） */
+    .controls.kei-mode .action-btn { display: none; }
+
+    /* ===== 計算タブ：式と答えの▢ ===== */
+    #kei-panel {
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 36px;
+        min-width: 420px;
+        box-sizing: border-box;
+    }
+    #kei-shiki {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 2.6rem;
+        font-weight: bold;
+        color: #333;
+        white-space: nowrap;
+    }
+    #kei-shiki .ans-frame { height: 72px; min-width: 96px; }
+    #kei-shiki .ten-box { width: 34px; height: 66px; font-size: 2.6rem; color: #e53935; }
+
+    /* 答えを入れる大きな▢。1文字ずつの箱にすると何けたか分かってしまうので、
+       枠は1つにして、入れた文字だけを中に出す */
+    .ten-boxes {
+        display: flex;
+        gap: 3px;
+        align-items: center;
+    }
+    .ten-box {
+        width: 36px;
+        height: 58px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2.1rem;
+        font-weight: bold;
+        color: #333;
+        position: relative;
+    }
+    .ans-frame {
+        gap: 0;
+        min-width: 68px;
+        height: 58px;
+        box-sizing: border-box;
+        padding: 0 6px;
+        justify-content: center;
+        border: 3px dashed #c4c4c4;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.02);
+    }
+    .ans-frame.active { border-color: #ff9800; background: rgba(255, 152, 0, 0.1); }
+    .ans-frame.filled { border-style: solid; border-color: #90caf9; background: #fff; }
+
+    /* ===== 10問チャレンジ ===== */
+    .chal-btn {
+        font-size: 1rem;
+        font-weight: bold;
+        color: #6a1b9a;
+        background: #f3e5f5;
+        border: 2px solid #ce93d8;
+        border-radius: 20px;
+        padding: 7px 16px;
+        box-shadow: 0 2px 0 #ce93d8;
+    }
+    .chal-btn.on {
+        color: #fff;
+        background: #8e24aa;
+        border-color: #6a1b9a;
+        box-shadow: 0 2px 0 #4a148c;
+    }
+    #chal-bar {
+        display: none;
+        align-items: center;
+        gap: 10px;
+        background: rgba(255,255,255,0.9);
+        border-radius: 20px;
+        padding: 6px 16px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        font-weight: bold;
+        color: #6a1b9a;
+        white-space: nowrap;
+    }
+    #chal-dots { color: #8e24aa; letter-spacing: 2px; font-size: 1.05rem; }
+    #chal-result {
+        display: none;
+        position: fixed;
+        left: 0; top: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.45);
+        z-index: 900;
+        align-items: center;
+        justify-content: center;
+    }
+    #chal-result.show { display: flex; }
+    .chal-card {
+        background: #fff;
+        border-radius: 20px;
+        padding: 28px 34px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        text-align: center;
+        max-width: 90vw;
+    }
+    .chal-title { font-size: 1.8rem; font-weight: bold; color: #8e24aa; margin-bottom: 14px; }
+    .chal-lines { font-size: 1.25rem; font-weight: bold; color: #333; line-height: 2; }
+    .chal-lines b { color: #e53935; font-size: 1.5rem; }
+    .chal-msg { margin-top: 10px; color: #ff6f00; }
+    .chal-btns { display: flex; gap: 12px; justify-content: center; margin-top: 20px; }
+    .chal-btns button { padding: 12px 20px; font-size: 1.1rem; }
+
+    /* ===== テンキーの下の ×・÷・＋・− と x・y・＝ のキー（式を入れるタブ用） ===== */
+    .op-pad {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 5px;
+        margin-top: 8px;
+        background: #ede7f6;
+        padding: 10px;
+        border-radius: 10px;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        visibility: hidden;
+        opacity: 0;
+        transition: opacity 0.2s;
+        min-width: 160px;
+    }
+    .op-pad.visible { visibility: visible; opacity: 1; }
+    .op-btn {
+        color: #5e35b1;
+        font-size: 1.5rem;
+        background: white;
+        box-shadow: 0 2px 0 #b39ddb;
+    }
+    .op-btn:active { box-shadow: 0 0 0 #b39ddb; transform: translateY(2px); }
+
+    /* ===== テンキー ===== */
+    .numpad {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 5px;
+        margin-top: 0;
+        background: #f5f5f5;
+        padding: 10px;
+        border-radius: 10px;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        visibility: hidden;
+        opacity: 0;
+        transition: opacity 0.2s;
+        align-content: start;
+        min-width: 160px;
+    }
+    .numpad.visible {
+        visibility: visible;
+        opacity: 1;
+    }
+    .num-btn {
+        padding: 10px 0;
+        font-size: 1.4rem;
+        background: white;
+        box-shadow: 0 2px 0 #ccc;
+    }
+    .num-btn:active, .num-btn.kb-press {
+        box-shadow: 0 0 0 #ccc;
+        transform: translateY(2px);
+    }
+
+    @media (max-width: 600px) {
+        .controls {
+            flex-direction: row;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        button { font-size: 1rem; padding: 10px; }
+        button.reset-btn { margin-top: 10px; width: 100%; }
+        .numpad { display: none; }
+        .numpad.visible { display: grid; }
+        .op-pad { display: none; }
+        .op-pad.visible { display: grid; }
+        /* 計算タブはスマホでは少し小さく */
+        #kei-panel { min-width: 0; width: 100%; padding: 18px 10px; }
+        .controls.kei-mode .reset-btn { width: auto; margin-top: 0; }   /* ヒントと もう一度 を横にならべる */
+        #kei-shiki { font-size: 1.9rem; gap: 8px; }
+        #kei-shiki .ans-frame { height: 58px; min-width: 76px; }
+        #kei-shiki .ten-box { width: 26px; height: 54px; font-size: 1.9rem; }
+    }
+
+    /* ===== アニメーション・エフェクト ===== */
+    .shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+    @keyframes shake {
+        10%, 90% { transform: translate3d(-2px, 0, 0); }
+        20%, 80% { transform: translate3d(4px, 0, 0); }
+        30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+        40%, 60% { transform: translate3d(6px, 0, 0); }
+    }
+
+    .hint-glow { animation: glow 1s infinite alternate; }
+    @keyframes glow {
+        from { box-shadow: 0 0 5px #ffeb3b, inset 0 0 5px #ffeb3b; background-color: rgba(255,235,59,0.4); }
+        to { box-shadow: 0 0 15px #ff9800, inset 0 0 15px #ff9800; background-color: rgba(255,152,0,0.7); }
+    }
+
+    .selected {
+        background-color: rgba(33, 150, 243, 0.3);
+        border-radius: 50%;
+    }
+    .selected-group-left {
+        background-color: rgba(33, 150, 243, 0.3);
+        border-radius: 25px 0 0 25px;
+    }
+    .selected-group-mid {
+        background-color: rgba(33, 150, 243, 0.3);
+        border-radius: 0;
+    }
+    .selected-group-right {
+        background-color: rgba(33, 150, 243, 0.3);
+        border-radius: 0 25px 25px 0;
+    }
+
+    .red-text { color: red; }
+
+    /* 数を入れるマスの点線の箱 */
+    .box-input {
+        border: 3px dashed #ff9800;
+        width: 80%;
+        height: 80%;
+        border-radius: 8px;
+        background: rgba(255, 152, 0, 0.1);
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* ドラッグ用（おろす） */
+    .draggable-span {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        height: 100%;
+        cursor: grab;
+        touch-action: none;
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        z-index: 100;
+        color: #00bcd4;
+    }
+    .draggable-span:active { cursor: grabbing; }
+
+    /* まちがいのポップアップ */
+    #popup {
+        position: absolute;
+        top: 20%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: var(--wrong-color);
+        color: white;
+        padding: 10px 30px;
+        border-radius: 30px;
+        font-size: 1.2rem;
+        font-weight: bold;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s;
+        z-index: 1000;
+    }
+    #popup.show { opacity: 1; }
+
+    /* 花丸 */
+    #hanamaru {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) scale(0);
+        width: 200px;
+        height: 200px;
+        pointer-events: none;
+        opacity: 0;
+        transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.6s;
+        background: url('https://github.com/byakusen/hanamaru/blob/main/hanamaru2.png?raw=true') no-repeat center center;
+        background-size: contain;
+        z-index: 500;
+    }
+    #hanamaru.show {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+    }
+
+    /* ===== 文字と式：問題の板 ===== */
+    .var { font-family: 'Times New Roman', 'Georgia', serif; font-style: italic; font-weight: bold; font-size: 1.12em; padding: 0 1px; }
+    .op-btn.var-btn { font-family: 'Times New Roman', 'Georgia', serif; font-style: italic; color: #00796b; }
+    .op-btn.eq-btn { color: #c62828; }
+    #moji-panel {
+        display: none;
+        flex-direction: column;
+        gap: 14px;
+        padding: 18px 20px;
+        width: 560px;
+        box-sizing: border-box;
+    }
+    .moji-scene {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        background: #fffde7;
+        border: 2px solid #fff59d;
+        border-radius: 12px;
+        padding: 12px 16px;
+        font-size: 1.25rem;
+        font-weight: bold;
+        line-height: 1.7;
+        color: #333;
+    }
+    .moji-fig { flex: 0 0 auto; }
+    .moji-fig svg { width: 150px; height: auto; display: block; }
+    .fig-emoji { font-size: 3.2rem; line-height: 1.1; text-align: center; }
+    .moji-text { flex: 1; }
+    .moji-kotoba {
+        display: none;
+        margin-top: 6px;
+        width: fit-content;
+        font-size: 1rem;
+        color: #c62828;
+        background: #fff;
+        border: 2px solid #ef9a9a;
+        border-radius: 8px;
+        padding: 0 10px;
+    }
+    .moji-kotoba.show { display: block; animation: cellFade 0.4s ease-out; }
+    .moji-lines { display: flex; flex-direction: column; gap: 12px; }
+    .moji-line {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 1.7rem;
+        font-weight: bold;
+        color: #333;
+    }
+    .moji-label {
+        flex: 0 0 72px;
+        text-align: center;
+        font-size: 1rem;
+        color: #1565c0;
+        background: #fff;
+        border: 2px solid #90caf9;
+        border-radius: 8px;
+        padding: 2px 0;
+    }
+    .moji-label.blank { visibility: hidden; }
+    .moji-frame {
+        display: flex;
+        align-items: center;
+        min-width: 150px;
+        height: 56px;
+        padding: 0 12px;
+        font-size: 1.8rem;
+        white-space: nowrap;
+    }
+    .moji-post { font-size: 1.4rem; }
+    /* 数をあてはめる：大きな式（x・y をおすと ななめ線、その下に数の▢） */
+    .moji-rel {
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        gap: 6px;
+        font-size: 2.8rem;
+        font-weight: bold;
+        color: #333;
+        background: #fff;
+        border: 3px solid #ffb74d;
+        border-radius: 14px;
+        padding: 6px 12px 4px;
+        margin-bottom: 8px;
+    }
+    .rel-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .rel-tok { height: 56px; display: flex; align-items: center; }
+    .rel-var {
+        position: relative;
+        height: 56px;
+        padding: 0 16px;
+        font-family: 'Times New Roman', 'Georgia', serif;
+        font-style: italic;
+        font-size: 1em;
+        color: #333;
+        background: #e0f2f1;
+        border: 2px solid #80cbc4;
+        border-radius: 12px;
+        box-shadow: 0 3px 0 #80cbc4;
+    }
+    .rel-var.struck { background: #fff; box-shadow: none; }
+    .rel-var.struck::after {
+        content: '';
+        position: absolute;
+        left: 6px; top: 6px; right: 6px; bottom: 6px;
+        background: linear-gradient(to top right, transparent calc(50% - 2px), #e53935 calc(50% - 2px), #e53935 calc(50% + 2px), transparent calc(50% + 2px));
+        pointer-events: none;
+    }
+    .moji-frame.rel-sub { min-width: 96px; height: 44px; justify-content: center; font-style: normal; visibility: hidden; }
+    .moji-q {
+        font-size: 1.25rem;
+        font-weight: bold;
+        line-height: 1.6;
+        color: #333;
+        background: #fffde7;
+        border: 2px solid #fff59d;
+        border-radius: 12px;
+        padding: 6px 14px;
+        margin-bottom: 8px;
+    }
+    #moji-st2 .moji-lines { gap: 8px; }
+    #moji-st2 .moji-frame:not(.rel-sub) { height: 48px; }
+
+    /* 計算のヒント：答えの段の横に出す筆算 */
+    .moji-line { position: relative; }
+    .hs-box {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        z-index: 5;
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        background: #fff;
+        border: 3px solid #81c784;
+        border-radius: 12px;
+        padding: 6px 12px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        animation: cellFade 0.4s ease-out;
+    }
+    .hs-box.hs-inline { position: static; margin-left: 4px; padding: 3px 10px; }
+    .hs-box.hs-inline .hs-grid { grid-auto-rows: 25px; }
+    #moji-panel[data-g="toku"] #moji-st2 .moji-frame:not(.rel-sub) { min-width: 120px; }
+    .hs-grid { --hs: 24px; display: grid; grid-auto-rows: 28px; font-size: 1.35rem; font-weight: bold; color: #333; }
+    .hs-c { position: relative; display: flex; align-items: center; justify-content: center; }
+    .hs-c.bot { border-bottom: 2px solid #333; }
+    .hs-c.dot::after { content: '.'; position: absolute; right: -4px; bottom: -2px; font-size: 1.3rem; }
+    .hs-c.paren::before { content: ')'; position: absolute; left: -5px; top: -3px; font-size: 1.45rem; transform: scale(1, 1.2); }
+
+    /* 場面をえらぶ */
+    .moji-ask {
+        text-align: center;
+        font-size: 2.2rem;
+        font-weight: bold;
+        color: #333;
+        background: #fff;
+        border: 3px solid #ffb74d;
+        border-radius: 14px;
+        padding: 6px 10px;
+        min-height: 3rem;
+    }
+    .bamen-cards, .bamen-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .bamen-card {
+        position: relative;
+        text-align: left;
+        font-size: 1.05rem;
+        line-height: 1.6;
+        padding: 10px 12px;
+        background: #fff8e1;
+        border: 3px solid #ffcc80;
+        box-shadow: 0 3px 0 #ffcc80;
+    }
+    .bamen-card .bc-name { color: #e65100; font-size: 1.1rem; margin-bottom: 2px; }
+    .show-unit .unit {
+        display: inline-block;
+        min-width: 1.1em;
+        line-height: 1.15;
+        text-align: center;
+        border: 2px solid #e53935;
+        border-radius: 999px;
+        padding: 0 1px;
+        margin: 0;
+        animation: cellFade 0.4s ease-out;
+    }
+    #moji-panel.show-unit[data-g="bamen"] .bamen-card { line-height: 1.38; padding-top: 3px; padding-bottom: 3px; }   /* ◯の ぶん 行が 高くならないように */
+    .bamen-card .bc-badge {
+        display: none;
+        position: absolute;
+        right: 8px;
+        top: 6px;
+        font-size: 1.15rem;
+        color: #fff;
+        background: #43a047;
+        border-radius: 10px;
+        padding: 0 10px;
+    }
+    .bamen-card.done { background: #e8f5e9; border-color: #a5d6a7; box-shadow: 0 3px 0 #a5d6a7; }
+    .bamen-card.done .bc-badge { display: block; }
+    #moji-panel[data-g="bamen"] .bamen-card.noname { line-height: 1.35; }
+    .bamen-card.noname .bc-badge { position: static; width: fit-content; margin-top: 1px; font-size: 1rem; line-height: 1.4; }   /* 式を読む：式は 文の下に（文に かさならない） */
+    .bamen-opt { font-size: 1.8rem; padding: 14px 10px; background: #fff; border: 3px solid #b39ddb; box-shadow: 0 3px 0 #b39ddb; }
+    .bamen-opt.done { background: #e8f5e9; border-color: #66bb6a; box-shadow: 0 3px 0 #66bb6a; }
+    /* まちがいを見つける：文の えらび肢・ゆうきさんの式（①が おわったら ✕）*/
+    .bamen-opt.txt { font-size: 1.12rem; line-height: 1.4; padding: 10px 8px; }
+    .moji-show { position: relative; padding: 2px 10px; min-height: 0; border-color: #ef9a9a; }
+    .moji-show.done { color: #9e9e9e; }
+    .moji-show.done::after { content: '✕'; position: absolute; right: 18px; top: 50%; transform: translateY(-50%); font-size: 2.4rem; color: #e53935; }
+    /* 文章題：2回めの ヒントの テープ図 */
+    #moji-panel.machi { gap: 10px; padding: 12px 18px; }
+    #moji-panel.machi .moji-scene { font-size: 1.08rem; line-height: 1.5; padding: 8px 14px; }
+    #moji-panel.machi .moji-fig svg { width: 110px; }
+    #moji-panel.machi .fig-emoji { font-size: 2.6rem; }
+    #moji-panel.machi .moji-show { font-size: 1.9rem; }
+    #moji-panel.machi .bamen-opts { grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    #moji-panel.machi .bamen-opt.txt { font-size: 1rem; padding: 8px 4px; }
+    #moji-panel.machi .moji-frame { height: 48px; }
+    .moji-tape { display: none; margin-top: 6px; background: #fff; border: 2px solid #ef9a9a; border-radius: 8px; padding: 2px 6px; }
+    .moji-tape.show { display: block; animation: cellFade 0.4s ease-out; }
+    .moji-tape svg { display: block; width: 100%; max-width: 400px; margin: 0 auto; }
+
+    /* 文章題・場面と式は 中身が多いので、少し つめて 1画面に 収める */
+    @media (min-width: 601px) {
+        #moji-panel[data-g="toku"], #moji-panel[data-g="bamen"] { gap: 10px; padding: 12px 18px; }
+        #moji-panel[data-g="toku"] .moji-scene { font-size: 1.08rem; line-height: 1.5; padding: 8px 14px; }
+        #moji-panel[data-g="toku"] .moji-fig svg { width: 110px; }
+        #moji-panel[data-g="toku"] .fig-emoji { font-size: 2.6rem; }
+        #moji-panel[data-g="toku"] .moji-lines { gap: 6px; }
+        #moji-panel[data-g="toku"] .moji-frame { height: 48px; }
+        #moji-panel[data-g="bamen"] .moji-ask { font-size: 1.8rem; padding: 2px 10px; min-height: 0; }
+        #moji-panel[data-g="bamen"] .moji-scene { font-size: 1.1rem; line-height: 1.5; padding: 8px 14px; }
+        #moji-panel[data-g="bamen"] .bamen-card { font-size: 1rem; line-height: 1.45; padding: 6px 10px; }
+        #moji-panel[data-g="bamen"] .bamen-opt { padding: 10px; }
+    }
+
+    @media (max-width: 600px) {
+        #moji-panel { width: 100%; padding: 10px 6px; gap: 10px; }
+        .moji-scene { font-size: 1rem; padding: 8px 10px; }
+        .moji-fig svg { width: 100px; }
+        .fig-emoji { font-size: 2.2rem; }
+        .moji-line { font-size: 1.3rem; gap: 6px; }
+        .moji-label { flex-basis: 54px; font-size: .85rem; }
+        .moji-frame { min-width: 110px; height: 46px; font-size: 1.4rem; }
+        .moji-ask { font-size: 1.6rem; }
+        .moji-rel { font-size: 1.8rem; }
+        .rel-tok, .rel-var { height: 46px; }
+        .moji-frame.rel-sub { min-width: 70px; height: 44px; }
+        .moji-q { font-size: 1rem; }
+        .hs-grid { --hs: 18px; grid-auto-rows: 22px; font-size: 1.05rem; }
+        .bamen-card { font-size: .9rem; padding: 8px; }
+        .bamen-opt { font-size: 1.3rem; padding: 10px 6px; }
+    }
+</style>
+</head>
+<body>
+
+<div id="app-container">
+    <div style="display: flex; justify-content: flex-start; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: -10px; z-index: 10;">
+        <div style="font-weight: bold; color: #ff5722; font-size: 1.2rem; background: rgba(255,255,255,0.9); padding: 5px 15px; border-radius: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            🔥 連続正解: <span id="combo-count">0</span>
+        </div>
+        <button id="btn-challenge" class="chal-btn">🏁 10問チャレンジ</button>
+        <div id="chal-bar"><span id="chal-dots"></span><span id="chal-count"></span></div>
+        <!-- ここ（chal-bar のうしろ）に「📝 テストの 練習」のボタンが自動で入る -->
+    </div>
+
+    <!-- 上のタブ。data-group は下の小タブの入れもの（GROUP_SUB）の名前 -->
+    <div class="settings" id="mode-tabs">
+        <button class="tab-btn active" data-group="shiki">式に表す</button>
+        <button class="tab-btn kake-tab" data-group="atai">数をあてはめる</button>
+        <button class="tab-btn" data-group="toku">文章題</button>
+        <button class="tab-btn kake-tab" data-group="bamen">場面と式</button>
+    </div>
+
+    <!-- 小タブ。data-mode が「モードの名前」（問題・手順・テストの練習は、この名前で見分ける） -->
+    <div id="shiki-sub" class="level-wrap">
+        <button class="level-btn active" data-mode="shiki1">xを使った式</button>
+        <button class="level-btn" data-mode="shiki2">xとyの関係</button>
+        <button class="level-btn" data-mode="shiki3">まちがいを見つける</button>
+    </div>
+    <div id="atai-sub" class="level-wrap">
+        <button class="level-btn active" data-mode="atai1">yの値を求める</button>
+        <button class="level-btn" data-mode="atai2">xの値を求める</button>
+    </div>
+    <div id="toku-sub" class="level-wrap">
+        <button class="level-btn active" data-mode="toku1">代金を求める</button>
+        <button class="level-btn" data-mode="toku2">1つ分を求める</button>
+    </div>
+    <div id="bamen-sub" class="level-wrap">
+        <button class="level-btn active" data-mode="bamen1">場面をえらぶ</button>
+        <button class="level-btn" data-mode="bamen2">式をえらぶ</button>
+        <button class="level-btn" data-mode="bamen3">式を読む</button>
+    </div>
+
+    <div id="instruction" class="header">読み込み中...</div>
+
+    <div class="main-content">
+        <div class="grid-wrapper">
+            <div class="grid">
+                <!-- Row 0 (商) -->
+                <div class="cell" id="cell-r0-c0"></div>
+                <div class="cell" id="cell-r0-c1"></div>
+                <div class="cell" id="cell-r0-c2"></div>
+                <div class="cell" id="cell-r0-c3"></div>
+                <div class="cell" id="cell-r0-c4"></div>
+                <div class="cell" id="cell-r0-c5"></div>
+                <div class="cell" id="cell-r0-c6"></div>
+                <div class="cell" id="cell-r0-c7"></div>
+                <div class="cell" id="cell-r0-c8"></div>
+                <div class="cell" id="cell-r0-c9"></div>
+                <!-- Row 1 (問題：わる数 ） わられる数) -->
+                <div class="cell" id="cell-r1-c0"></div>
+                <div class="cell" id="cell-r1-c1"></div>
+                <div class="cell" id="cell-r1-c2"></div>
+                <div class="cell" id="cell-r1-c3"></div>
+                <div class="cell" id="cell-r1-c4"></div>
+                <div class="cell" id="cell-r1-c5"></div>
+                <div class="cell" id="cell-r1-c6"></div>
+                <div class="cell" id="cell-r1-c7"></div>
+                <div class="cell" id="cell-r1-c8"></div>
+                <div class="cell" id="cell-r1-c9"></div>
+                <!-- Row 2 (積1) -->
+                <div class="cell" id="cell-r2-c0"></div>
+                <div class="cell" id="cell-r2-c1"></div>
+                <div class="cell" id="cell-r2-c2"></div>
+                <div class="cell" id="cell-r2-c3"></div>
+                <div class="cell" id="cell-r2-c4"></div>
+                <div class="cell" id="cell-r2-c5"></div>
+                <div class="cell" id="cell-r2-c6"></div>
+                <div class="cell" id="cell-r2-c7"></div>
+                <div class="cell" id="cell-r2-c8"></div>
+                <div class="cell" id="cell-r2-c9"></div>
+                <!-- Row 3 (差1・おろした数) -->
+                <div class="cell" id="cell-r3-c0"></div>
+                <div class="cell" id="cell-r3-c1"></div>
+                <div class="cell" id="cell-r3-c2"></div>
+                <div class="cell" id="cell-r3-c3"></div>
+                <div class="cell" id="cell-r3-c4"></div>
+                <div class="cell" id="cell-r3-c5"></div>
+                <div class="cell" id="cell-r3-c6"></div>
+                <div class="cell" id="cell-r3-c7"></div>
+                <div class="cell" id="cell-r3-c8"></div>
+                <div class="cell" id="cell-r3-c9"></div>
+                <!-- Row 4 (積2) -->
+                <div class="cell" id="cell-r4-c0"></div>
+                <div class="cell" id="cell-r4-c1"></div>
+                <div class="cell" id="cell-r4-c2"></div>
+                <div class="cell" id="cell-r4-c3"></div>
+                <div class="cell" id="cell-r4-c4"></div>
+                <div class="cell" id="cell-r4-c5"></div>
+                <div class="cell" id="cell-r4-c6"></div>
+                <div class="cell" id="cell-r4-c7"></div>
+                <div class="cell" id="cell-r4-c8"></div>
+                <div class="cell" id="cell-r4-c9"></div>
+                <!-- Row 5 (差2・おろした数) -->
+                <div class="cell" id="cell-r5-c0"></div>
+                <div class="cell" id="cell-r5-c1"></div>
+                <div class="cell" id="cell-r5-c2"></div>
+                <div class="cell" id="cell-r5-c3"></div>
+                <div class="cell" id="cell-r5-c4"></div>
+                <div class="cell" id="cell-r5-c5"></div>
+                <div class="cell" id="cell-r5-c6"></div>
+                <div class="cell" id="cell-r5-c7"></div>
+                <div class="cell" id="cell-r5-c8"></div>
+                <div class="cell" id="cell-r5-c9"></div>
+                <!-- Row 6 (積3) -->
+                <div class="cell" id="cell-r6-c0"></div>
+                <div class="cell" id="cell-r6-c1"></div>
+                <div class="cell" id="cell-r6-c2"></div>
+                <div class="cell" id="cell-r6-c3"></div>
+                <div class="cell" id="cell-r6-c4"></div>
+                <div class="cell" id="cell-r6-c5"></div>
+                <div class="cell" id="cell-r6-c6"></div>
+                <div class="cell" id="cell-r6-c7"></div>
+                <div class="cell" id="cell-r6-c8"></div>
+                <div class="cell" id="cell-r6-c9"></div>
+                <!-- Row 7 (あまり) -->
+                <div class="cell" id="cell-r7-c0"></div>
+                <div class="cell" id="cell-r7-c1"></div>
+                <div class="cell" id="cell-r7-c2"></div>
+                <div class="cell" id="cell-r7-c3"></div>
+                <div class="cell" id="cell-r7-c4"></div>
+                <div class="cell" id="cell-r7-c5"></div>
+                <div class="cell" id="cell-r7-c6"></div>
+                <div class="cell" id="cell-r7-c7"></div>
+                <div class="cell" id="cell-r7-c8"></div>
+                <div class="cell" id="cell-r7-c9"></div>
+            </div>
+            <!-- 計算タブの板（マスの代わりに出す）：式 ＝ ▢ -->
+            <div id="kei-panel">
+                <div id="kei-shiki">
+                    <span id="kei-q"></span>
+                    <span>＝</span>
+                    <div class="ten-boxes ans-frame" id="kei-g0"></div>
+                </div>
+            </div>
+            <!-- 文字と式の板（問題文・式の▢・場面のカード） -->
+            <div id="moji-panel"></div>
+        </div>
+
+        <div class="controls">
+            <button id="btn-tateru" class="action-btn">たてる</button>
+            <button id="btn-kakeru" class="action-btn">かける</button>
+            <button id="btn-hiku" class="action-btn">ひく</button>
+            <button id="btn-orosu" class="action-btn">おろす</button>
+            <div class="hint-row">
+                <button id="btn-hint" class="hint-btn">ヒント</button>
+            </div>
+            <button id="btn-reset" class="reset-btn">次の問題</button>
+        </div>
+
+        <div style="position: relative;">
+            <div id="numpad" class="numpad">
+                <button class="num-btn" data-val="1">1</button>
+                <button class="num-btn" data-val="2">2</button>
+                <button class="num-btn" data-val="3">3</button>
+                <button class="num-btn" data-val="4">4</button>
+                <button class="num-btn" data-val="5">5</button>
+                <button class="num-btn" data-val="6">6</button>
+                <button class="num-btn" data-val="7">7</button>
+                <button class="num-btn" data-val="8">8</button>
+                <button class="num-btn" data-val="9">9</button>
+                <div style="visibility: hidden;"></div>
+                <button class="num-btn" data-val="0">0</button>
+                <button class="num-btn dot-btn" data-val=".">.</button>
+            </div>
+            <div id="op-pad" class="op-pad">
+                <button class="num-btn op-btn" data-val="×">×</button>
+                <button class="num-btn op-btn" data-val="÷">÷</button>
+                <button class="num-btn op-btn" data-val="＋">＋</button>
+                <button class="num-btn op-btn" data-val="−">−</button>
+                <button class="num-btn op-btn var-btn" data-val="x">x</button>
+                <button class="num-btn op-btn var-btn" data-val="y">y</button>
+                <button class="num-btn op-btn eq-btn" data-val="＝">＝</button>
+            </div>
+            <div id="hanamaru"></div>
+        </div>
+    </div>
+</div>
+
+<div id="popup">ちがうよ！</div>
+
+<!-- 10問チャレンジの成せき表 -->
+<div id="chal-result">
+    <div class="chal-card">
+        <div class="chal-title">🏁 10問 できました！</div>
+        <div class="chal-lines" id="chal-lines"></div>
+        <div class="chal-btns">
+            <button id="btn-chal-again" class="reset-btn">もう一度チャレンジ</button>
+            <button id="btn-chal-quit" class="hint-btn">やめる</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// =====================================================================
+// ▼ ここから下が「アプリごとに書きかえる」ところ ▼
+// =====================================================================
+
+// はじめに開くモード（小タブの data-mode）
+let currentMode = 'shiki1';
+
+// 上のタブ（data-group）と、その下に出す小タブの入れもの（id）
+const GROUP_SUB = { shiki: 'shiki-sub', atai: 'atai-sub', toku: 'toku-sub', bamen: 'bamen-sub' };
+
+// 小タブを開いたときの「最初の1問」（見本問題）。書かないモードは はじめからランダム
+//   文字と式のタブは true にすると、テストと同じ問題（MOJI_POOL の いちばん上）から始まる
+const TAB_PROBLEM = {
+    'shiki1': true,   // 縦4cmの長方形の面積 → 4×x
+    'shiki2': true,   // 1個x円のプリン6個 → x×6＝y
+    'atai1':  true,   // x×6＝y の x に 120 → y＝720
+    'atai2':  true,   // x×6＝y の y に 540 → x＝540÷6 → 90
+    'toku1':  true,   // 130×x＋150、6個 → 930円
+    'toku2':  true,   // 正三角形のまわり51cm → 17cm
+    'bamen1': true    // 15＋x＝y などの場面（りつ・あおい・えりか・いくと）
+};
+
+// --- 文字と式の問題 ---
+//   1問 ＝ { fig, scene, kotoba, lines:[{label, pre, post, text, ans:[正解の式…]}], answer }
+//          または 場面えらび { scene, cards / opts, choices:[{text, ask, expect}] }
+//   ans は 子どもが キーで 入れる 文字の ならび（x y ＋ − × ÷ ＝ . と 数字）。いくつか 書けば どれでも 正解
+//   m が true のときは テストと同じ数（見本問題）
+const MI = '\u2212';   // −（キーと同じ文字）
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const num = v => String(Math.round(v * 100) / 100);
+const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const VX = '<tspan font-style="italic" font-family="Times New Roman,serif">x</tspan>';
+const FIG = {
+    rect: a => `<svg viewBox="0 0 180 112"><rect x="46" y="8" width="126" height="72" rx="2" fill="#f8bbd0" stroke="#c2185b" stroke-width="2"/><text x="40" y="50" text-anchor="end" font-size="19" font-weight="bold">${a}cm</text><text x="109" y="104" text-anchor="middle" font-size="19" font-weight="bold">${VX}cm</text></svg>`,
+    tri:  () => `<svg viewBox="0 0 170 116"><polygon points="105,8 160,104 50,104" fill="#fff59d" stroke="#9e9d24" stroke-width="2"/><text x="74" y="56" text-anchor="end" font-size="19" font-weight="bold">${VX}cm</text></svg>`,
+    sq:   () => `<svg viewBox="0 0 170 116"><rect x="62" y="12" width="88" height="88" fill="#b3e5fc" stroke="#0277bd" stroke-width="2"/><text x="56" y="62" text-anchor="end" font-size="19" font-weight="bold">${VX}cm</text></svg>`,
+    emo:  e => `<div class="fig-emoji">${e}</div>`
+};
+const ITEMS = [ { n: 'プリン', u: '個', e: '🍮' }, { n: 'カーネーション', u: '本', e: '🌸' }, { n: 'ノート', u: '冊', e: '📓' } ];
+
+const MOJI_POOL = {
+    // ===== 式に表す：x を使った式 =====
+    shiki1: [
+        m => { const a = m ? 4 : rnd(3, 9);
+            return { fig: FIG.rect(a), scene: `縦の長さが ${a}cm の長方形の面積を考えます。横の長さを x cm として、長方形の面積を表す式を書きましょう。`,
+                     kotoba: '縦の長さ × 横の長さ', lines: [{ label: '式', text: '面積を表す式を書きましょう。', ans: [`${a}×x`, `x×${a}`] }] }; },
+        m => { const a = pick([80, 90, 110, 120, 130, 150]), b = pick([100, 150, 200]);
+            return { fig: FIG.emo('🍎🧺'), scene: `1個 ${a}円のりんごを x 個、${b}円のかごにつめて買います。代金の合計を式に表しましょう。`,
+                     kotoba: 'りんご1個の値段 × 個数 ＋ かごの値段', lines: [{ label: '式', text: '代金の合計を表す式を書きましょう。', ans: [`${a}×x＋${b}`, `x×${a}＋${b}`, `${b}＋${a}×x`, `${b}＋x×${a}`] }] }; },
+        m => { const a = pick([50, 60, 70, 80, 90]);
+            return { fig: FIG.emo('✏️'), scene: `1本 ${a}円のえん筆を x 本買います。代金を表す式を書きましょう。`,
+                     kotoba: '1本の値段 × 本数', lines: [{ label: '式', text: '代金を表す式を書きましょう。', ans: [`${a}×x`, `x×${a}`] }] }; },
+        m => { const a = pick([60, 80, 100, 120]);
+            return { fig: FIG.emo('📓'), scene: `x 円のノートと、${a}円の消しゴムを1つずつ買います。代金の合計を表す式を書きましょう。`,
+                     kotoba: 'ノートの値段 ＋ 消しゴムの値段', lines: [{ label: '式', text: '代金の合計を表す式を書きましょう。', ans: [`x＋${a}`, `${a}＋x`] }] }; },
+        m => ({ fig: FIG.sq(), scene: '1辺の長さが x cm の正方形があります。まわりの長さを表す式を書きましょう。',
+                kotoba: '1辺の長さ × 辺の数', lines: [{ label: '式', text: 'まわりの長さを表す式を書きましょう。', ans: ['x×4', '4×x'] }] }),
+        m => { const a = pick([150, 200, 250, 300]);
+            return { fig: FIG.emo('🧃'), scene: `x mL のジュースから ${a}mL 飲みました。残りの量を表す式を書きましょう。`,
+                     kotoba: 'はじめの量 − 飲んだ量', lines: [{ label: '式', text: '残りの量を表す式を書きましょう。', ans: [`x${MI}${a}`] }] }; }
+    ],
+    // ===== 式に表す：x と y の関係 =====
+    shiki2: [
+        m => { const a = m ? 6 : rnd(3, 9), it = m ? ITEMS[0] : pick(ITEMS);
+            return { fig: FIG.emo(it.e), scene: `1${it.u} x 円の${it.n}を ${a}${it.u}買います。代金は y 円です。`,
+                     kotoba: `1${it.u}の値段 × ${it.u}数 ＝ 代金`, lines: [{ label: '式', text: 'x と y の関係を式に表しましょう。', ans: [`x×${a}＝y`, `${a}×x＝y`] }] }; },
+        m => { const n = pick([1000, 5000]);
+            return { fig: FIG.emo('💴'), scene: `x 円の品物を買って、${n}円札を1枚出しました。おつりは y 円です。`,
+                     kotoba: '出したお金 − 代金 ＝ おつり', lines: [{ label: '式', text: 'x と y の関係を式に表しましょう。', ans: [`${n}${MI}x＝y`] }] }; },
+        m => { const a = pick([100, 150, 200, 300]);
+            return { fig: FIG.emo('🍚'), scene: `x g の砂糖を ${a}g の容器に入れます。全体の重さは y g です。`,
+                     kotoba: '砂糖の重さ ＋ 容器の重さ ＝ 全体の重さ', lines: [{ label: '式', text: 'x と y の関係を式に表しましょう。', ans: [`x＋${a}＝y`, `${a}＋x＝y`] }] }; },
+        m => { const a = rnd(3, 9);
+            return { fig: FIG.emo('📖'), scene: `x ページの本を ${a}日間で読む予定です。1日に平均 y ページ読むことになります。`,
+                     kotoba: '全体のページ数 ÷ 日数 ＝ 1日のページ数', lines: [{ label: '式', text: 'x と y の関係を式に表しましょう。', ans: [`x÷${a}＝y`] }] }; },
+        m => ({ fig: FIG.tri(), scene: '1辺の長さが x cm の正三角形のまわりの長さは y cm です。',
+                kotoba: '1辺の長さ × 辺の数 ＝ まわりの長さ', lines: [{ label: '式', text: 'x と y の関係を式に表しましょう。', ans: ['x×3＝y', '3×x＝y'] }] })
+    ],
+    // ===== 式に表す：まちがいを見つける（①どこがちがうか えらぶ → ②正しい式を書く）=====
+    shiki3: [ m => makeMachigai() ],
+    // ===== 数をあてはめる：y の値を求める（①関係の式を書く → ②式の x をおして 値を入れる → 答え）=====
+    atai1: [
+        m => { const a = m ? 6 : rnd(3, 9), v = m ? 120 : rnd(8, 15) * 10, it = m ? ITEMS[0] : pick(ITEMS);
+            return mkAtaiY({ fig: FIG.emo(it.e), scene: `1${it.u} x 円の${it.n}を ${a}${it.u}買います。代金は y 円です。`,
+                kotoba: `1${it.u}の値段 × ${it.u}数 ＝ 代金`, rel: [`x×${a}＝y`, `${a}×x＝y`], v: v, res: num(v * a), calc: [[v, '×', a]] }); },
+        m => { const a = rnd(2, 9), v = Math.random() < 0.5 ? rnd(10, 20) : rnd(3, 9) + 0.5;
+            return mkAtaiY({ fig: FIG.rect(a), scene: `縦が ${a}cm、横が x cm の長方形の面積を y cm² とします。`,
+                kotoba: '縦の長さ × 横の長さ ＝ 面積', rel: [`${a}×x＝y`, `x×${a}＝y`], v: num(v), res: num(a * v), calc: [[v, '×', a]] }); },
+        m => { const a = pick([100, 150, 200]), v = pick([250, 300, 350, 400, 450, 500]);
+            return mkAtaiY({ fig: FIG.emo('🍚'), scene: `x g の砂糖を ${a}g の容器に入れます。全体の重さは y g です。`,
+                kotoba: '砂糖の重さ ＋ 容器の重さ ＝ 全体の重さ', rel: [`x＋${a}＝y`, `${a}＋x＝y`], v: v, res: num(v + a), calc: [[v, '＋', a]] }); },
+        m => { const v = pick([150, 200, 300, 450, 600, 800]);
+            return mkAtaiY({ fig: FIG.emo('💴'), scene: `x 円の品物を買って、1000円札を1枚出しました。おつりは y 円です。`,
+                kotoba: '出したお金 − 代金 ＝ おつり', rel: [`1000${MI}x＝y`], v: v, res: num(1000 - v), calc: [[1000, MI, v]] }); },
+        m => { const v = rnd(5, 25);
+            return mkAtaiY({ fig: FIG.tri(), scene: '1辺の長さが x cm の正三角形のまわりの長さは y cm です。',
+                kotoba: '1辺の長さ × 辺の数 ＝ まわりの長さ', rel: ['x×3＝y', '3×x＝y'], v: v, res: num(v * 3), calc: [[v, '×', 3]] }); },
+        m => { const a = rnd(3, 9), k = rnd(10, 30);
+            return mkAtaiY({ fig: FIG.emo('📖'), scene: `x ページの本を ${a}日間で読む予定です。1日に平均 y ページ読むことになります。`,
+                kotoba: '全体のページ数 ÷ 日数 ＝ 1日のページ数', rel: [`x÷${a}＝y`], v: a * k, res: num(k), calc: [[a * k, '÷', a]] }); }
+    ],
+    // ===== 数をあてはめる：x の値を求める（①関係の式を書く → ②式の y をおして 値を入れる → x を求める式 → 答え）=====
+    atai2: [
+        m => { const a = m ? 6 : rnd(3, 9), xv = m ? 90 : rnd(6, 15) * 10, y = a * xv, it = m ? ITEMS[0] : pick(ITEMS);
+            return mkAtaiX({ fig: FIG.emo(it.e), scene: `1${it.u} x 円の${it.n}を ${a}${it.u}買います。代金は y 円です。`,
+                kotoba: `1${it.u}の値段 × ${it.u}数 ＝ 代金`, rel: [`x×${a}＝y`, `${a}×x＝y`], v: y,
+                k2: `x×${a}＝${y} の x は、${y}÷${a} で 求める`, inv: [`${y}÷${a}`], res: xv, calc: [[y, '÷', a]] }); },
+        m => { const a = rnd(2, 9), xv = rnd(6, 20), y = a * xv;
+            return mkAtaiX({ fig: FIG.rect(a), scene: `縦が ${a}cm、横が x cm の長方形の面積を y cm² とします。`,
+                kotoba: '縦の長さ × 横の長さ ＝ 面積', rel: [`${a}×x＝y`, `x×${a}＝y`], v: y,
+                k2: `${a}×x＝${y} の x は、${y}÷${a} で 求める`, inv: [`${y}÷${a}`], res: xv, calc: [[y, '÷', a]] }); },
+        m => { const a = pick([100, 150, 200]), xv = pick([250, 300, 350, 400, 450, 500]), y = xv + a;
+            return mkAtaiX({ fig: FIG.emo('🍚'), scene: `x g の砂糖を ${a}g の容器に入れます。全体の重さは y g です。`,
+                kotoba: '砂糖の重さ ＋ 容器の重さ ＝ 全体の重さ', rel: [`x＋${a}＝y`, `${a}＋x＝y`], v: y,
+                k2: `x＋${a}＝${y} の x は、${y}${MI}${a} で 求める`, inv: [`${y}${MI}${a}`], res: xv, calc: [[y, MI, a]] }); },
+        m => { const a = rnd(3, 9), k = rnd(8, 20);
+            return mkAtaiX({ fig: FIG.emo('📖'), scene: `x ページの本を ${a}日間で読む予定です。1日に平均 y ページ読むことになります。`,
+                kotoba: '全体のページ数 ÷ 日数 ＝ 1日のページ数', rel: [`x÷${a}＝y`], v: k,
+                k2: `x÷${a}＝${k} の x は、${k}×${a} で 求める`, inv: [`${k}×${a}`, `${a}×${k}`], res: a * k, calc: [[k, '×', a]] }); },
+        m => { const xv = rnd(6, 30), y = xv * 3;
+            return mkAtaiX({ fig: FIG.tri(), scene: '1辺の長さが x cm の正三角形のまわりの長さは y cm です。',
+                kotoba: '1辺の長さ × 辺の数 ＝ まわりの長さ', rel: ['x×3＝y', '3×x＝y'], v: y,
+                k2: `x×3＝${y} の x は、${y}÷3 で 求める`, inv: [`${y}÷3`], res: xv, calc: [[y, '÷', 3]] }); }
+    ],
+    // ===== 文章題：代金を求める（①式に表す → ②式の x をおして 数をあてはめる → 答え）=====
+    toku1: [
+        m => { const a = m ? 130 : pick([80, 90, 110, 120, 130, 150]), b = m ? 150 : pick([100, 150, 200]), n = m ? 6 : rnd(3, 9);
+            return mkToku1({ fig: FIG.emo('🍎🧺'), scene: `1個 ${a}円のりんごを x 個、${b}円のかごにつめて買います。`,
+                q2: `② りんご ${n}個を かごにつめて買うときの代金の合計は、何円ですか。`,
+                kotoba: 'りんご1個の値段 × 個数 ＋ かごの値段', a: a, b: b, n: n, nA: 'りんご', uA: '個', nB: 'かご' }); },
+        m => { const a = pick([250, 300, 350, 400]), b = pick([50, 100]), n = rnd(2, 6);
+            return mkToku1({ fig: FIG.emo('🍰🎁'), scene: `1個 ${a}円のケーキを x 個、${b}円の箱に入れて買います。`,
+                q2: `② ケーキ ${n}個を 箱に入れて買うときの代金の合計は、何円ですか。`,
+                kotoba: 'ケーキ1個の値段 × 個数 ＋ 箱の値段', a: a, b: b, n: n, nA: 'ケーキ', uA: '個', nB: '箱' }); },
+        m => { const a = pick([120, 150, 180]), b = pick([100, 110, 130]), n = rnd(2, 8);
+            return mkToku1({ fig: FIG.emo('📓🖊️'), scene: `1冊 ${a}円のノートを x 冊と、${b}円のペンを1本買います。`,
+                q2: `② ノートを ${n}冊にすると、代金の合計は何円ですか。`,
+                kotoba: 'ノート1冊の値段 × 冊数 ＋ ペンの値段', a: a, b: b, n: n, nA: 'ノート', uA: '冊', nB: 'ペン' }); }
+    ],
+    // ===== 文章題：1つ分を求める（①かけ算の式に表す → ②（大きな式）x を求める式 → 答え）=====
+    toku2: [
+        m => { const xv = m ? 17 : rnd(8, 30), y = xv * 3;
+            return mkToku2({ fig: FIG.tri(), scene: `正三角形のまわりの長さは ${y}cm です。<br>① 1辺の長さを x cm として、かけ算の式に表しましょう。`,
+                q2: '② 1辺の長さは何cmですか。', kotoba: '1辺の長さ × 辺の数 ＝ まわりの長さ',
+                rel: [`x×3＝${y}`, `3×x＝${y}`], y: y, d: 3, xv: xv, post: 'cm', ansText: '1辺の長さを書きましょう。', cnt: '3辺分' }); },
+        m => { const xv = rnd(6, 25), y = xv * 4;
+            return mkToku2({ fig: FIG.sq(), scene: `正方形のまわりの長さは ${y}cm です。<br>① 1辺の長さを x cm として、かけ算の式に表しましょう。`,
+                q2: '② 1辺の長さは何cmですか。', kotoba: '1辺の長さ × 辺の数 ＝ まわりの長さ',
+                rel: [`x×4＝${y}`, `4×x＝${y}`], y: y, d: 4, xv: xv, post: 'cm', ansText: '1辺の長さを書きましょう。', cnt: '4辺分' }); },
+        m => { const a = rnd(3, 9), xv = rnd(6, 15) * 10, y = a * xv, it = pick(ITEMS);
+            return mkToku2({ fig: FIG.emo(it.e), scene: `${it.n}を ${a}${it.u}買ったら、代金は ${y}円でした。<br>① 1${it.u}の値段を x 円として、かけ算の式に表しましょう。`,
+                q2: `② 1${it.u}の値段は何円ですか。`, kotoba: `1${it.u}の値段 × ${it.u}数 ＝ 代金`,
+                rel: [`x×${a}＝${y}`, `${a}×x＝${y}`], y: y, d: a, xv: xv, post: '円', ansText: `1${it.u}の値段を書きましょう。`, cnt: `${a}${it.u}分` }); }
+    ],
+    // ===== 場面と式：式から場面をえらぶ（4人のカード）=====
+    bamen1: [ m => makeBamen1(m) ],
+    // ===== 場面と式：場面から式をえらぶ =====
+    bamen2: [ m => makeBamen2() ],
+    // ===== 場面と式：式を読む（式が 何を表しているか、カードから えらぶ）=====
+    bamen3: [ m => makeYomu() ]
+};
+
+// 数をあてはめる問題の形（rel：関係の式／v：あてはめる数／res：答え）
+//   ①（stage 1）関係の式を書く → ②式を大きく出して、x か y をおす（ななめ線）→ その下に数 → 答え
+function mkAtaiY(o) {
+    return { fig: o.fig, scene: o.scene, kotoba: o.kotoba, rel: true, answer: `y＝${o.res}`,
+             q2: `x の値が ${o.v} のとき、対応する y の値を求めましょう。`, kotoba2: `x のところに ${o.v} を入れて計算する`,
+             lines: [
+                { stage: 1, label: '式', text: 'x と y の関係を式に表しましょう。', ans: o.rel },
+                { pick: 'x', text: `x に ${o.v} をあてはめます。式の x をおしましょう。` },
+                { sub: true, text: `x の下に ${o.v} を入れましょう。`, ans: [String(o.v)] },
+                { label: '答え', pre: 'y＝', text: 'y の値を書きましょう。', ans: [String(o.res)], calc: o.calc } ] };
+}
+function mkAtaiX(o) {
+    return { fig: o.fig, scene: o.scene, kotoba: o.kotoba, rel: true, answer: `x＝${o.res}`,
+             q2: `y の値が ${o.v} になるときの、x の値を求めましょう。`, kotoba2: o.k2,
+             lines: [
+                { stage: 1, label: '式', text: 'x と y の関係を式に表しましょう。', ans: o.rel },
+                { pick: 'y', text: `y に ${o.v} をあてはめます。式の y をおしましょう。` },
+                { sub: true, text: `y の下に ${o.v} を入れましょう。`, ans: [String(o.v)] },
+                { label: '式', pre: 'x＝', text: 'x を求める式を書きましょう。', ans: o.inv },
+                { label: '答え', pre: 'x＝', text: 'x の値を書きましょう。', ans: [String(o.res)], calc: o.calc } ] };
+}
+
+// 文章題の形（「数をあてはめる」と同じく、①式を書く → ②その式を大きく出して 答えを出す）
+//   代金：a×x＋b の x に n をあてはめる
+function mkToku1(o) {
+    const { a, b, n } = o, res = a * n + b;
+    return { fig: o.fig, scene: o.scene, kotoba: o.kotoba, rel: true, answer: `${res}円`, tape: tapeSum(a, b, o.nA, o.uA, o.nB),
+             q2: o.q2, kotoba2: `x のところに ${n} を入れて計算する`,
+             lines: [
+                { stage: 1, label: '① 式', text: '① 代金の合計を、x を使った式に表しましょう。', ans: [`${a}×x＋${b}`, `x×${a}＋${b}`, `${b}＋${a}×x`, `${b}＋x×${a}`] },
+                { pick: 'x', text: `② x に ${n} をあてはめます。式の x をおしましょう。` },
+                { sub: true, text: `x の下に ${n} を入れましょう。`, ans: [String(n)] },
+                { label: '答え', text: '代金の合計を書きましょう。', ans: [String(res)], post: '円', calc: [[a, '×', n], [a * n, '＋', b]] } ] };
+}
+//   1つ分：x×d＝y の x を y÷d で求める
+function mkToku2(o) {
+    return { fig: o.fig, scene: o.scene, kotoba: o.kotoba, rel: true, answer: `${o.xv}${o.post}`, tape: tapeDiv(o.d, o.y, o.post, o.cnt),
+             q2: o.q2, kotoba2: `x×${o.d}＝${o.y} の x は、${o.y}÷${o.d} で 求める`,
+             lines: [
+                { stage: 1, label: '① 式', text: '① 数量の関係を、かけ算の式に表しましょう。', ans: o.rel },
+                { label: '② 式', pre: 'x＝', text: '② x を求める式を書きましょう。', ans: [`${o.y}÷${o.d}`] },
+                { label: '答え', text: o.ansText, ans: [String(o.xv)], post: o.post, calc: [[o.y, '÷', o.d]] } ] };
+}
+
+// 場面のカードの文（n は式の中の数）。いちばん上がテストと同じ文
+//   {円} のように ｛｝で かこんだ字が 単位（場面をえらぶ の ヒントで ◯で かこむ）
+const BAMEN_T = {
+    '＋': [ n => `${n}{円}のガムと x {円}のグミを買います。代金は y {円}です。`, n => `ジュースが ${n}{本}あります。x {本}買ってくると、全部で y {本}です。` ],
+    [MI]: [ n => `シールが ${n}{枚}あって、x {枚}使いました。残りは y {枚}です。`, n => `${n}{m} のリボンから x {m} 切り取りました。残りは y {m} です。` ],
+    '×': [ n => `1{m} の重さが ${n}{g} の針金が x {m} あります。重さは y {g} です。`, n => `1{個} ${n}{円}のあめを x {個}買います。代金は y {円}です。` ],
+    '÷': [ n => `${n}{L} のお茶を x {人}で等分しました。1{人}分は y {L} です。`, n => `${n}{cm} のテープを x {本}に等しく分けます。1{本}の長さは y {cm} です。` ]
+};
+const unitMark = t => t.replace(/\{(.+?)\}/g, '<span class="unit">$1</span>');   // 単位に しるし（ふだんは ふつうの字）
+const unitOff  = t => t.replace(/\{(.+?)\}/g, '$1');
+const BAMEN_OPS = ['＋', MI, '×', '÷'];
+const BAMEN_HITO = ['りつ', 'あおい', 'えりか', 'いくと'];
+function makeBamen1(m) {
+    const n = m ? 15 : rnd(10, 40);
+    const ops = m ? [MI, '÷', '×', '＋'] : shuffle(BAMEN_OPS);              // りつ・あおい・えりか・いくと の場面
+    const cards = BAMEN_HITO.map((h, k) => ({ name: h, op: ops[k], text: (m ? BAMEN_T[ops[k]][0] : pick(BAMEN_T[ops[k]]))(n) }));
+    const order = m ? ['＋', '×', MI, '÷'] : shuffle(BAMEN_OPS);           // 聞く順
+    return { scene: '数量の関係が 次の式で表される場面を考えたのは、だれですか。', answer: 'ぜんぶ できました！', cards: cards, unit: true,
+             kotoba: '単位を ◯で かこんだよ。ぜんぶ 同じ → ＋か −　ちがう → ×か ÷',
+             choices: order.map(op => { const f = `${n}${op}x＝y`;
+                 return { text: `${f} の場面を考えたのは、だれですか。`, ask: f, expect: cards.findIndex(c => c.op === op) }; }) };
+}
+function makeBamen2() {
+    const n = rnd(10, 40), op = pick(BAMEN_OPS);
+    const opts = shuffle(BAMEN_OPS).map(o => `${n}${o}x＝y`);
+    return { fig: FIG.emo('🤔'), scene: pick(BAMEN_T[op])(n), answer: `${n}${op}x＝y`, opts: opts, unit: true,
+             kotoba: '単位を ◯で かこんだよ。ぜんぶ 同じ → ＋か −　ちがう → ×か ÷',
+             choices: [{ text: 'この場面に合う式は、どれですか。', expect: opts.indexOf(`${n}${op}x＝y`) }] };
+}
+// 式を読む：同じ場面の 式を 3つ 出し、何を表しているか 4枚の カードから えらぶ（1枚は 数を 入れかえた ひっかけ）
+const YOMU_SET = [
+    { A: 'ノート', uA: '冊', B: 'えん筆', uB: '本', bs: [60, 70, 80, 90], e: '📓✏️' },
+    { A: 'ケーキ', uA: '個', B: 'ジュース', uB: '本', bs: [120, 130, 150], e: '🍰🧃' },
+    { A: 'りんご', uA: '個', B: 'みかん', uB: '個', bs: [40, 50, 60], e: '🍎🍊' }
+];
+function makeYomu() {
+    const S = pick(YOMU_SET), b = pick(S.bs), [a, c] = shuffle([2, 3, 4, 5]).slice(0, 2);
+    const A1 = `${S.A}1${S.uA}`, B1 = `${S.B}1${S.uB}`;
+    const F = [
+        { f: `x×${a}＋${b}×${c}`, t: `${S.A}${a}${S.uA}と${S.B}${c}${S.uB}の代金の合計`, k: `x×${a} は ${S.A}${a}${S.uA}の代金、${b}×${c} は ${S.B}${c}${S.uB}の代金` },
+        { f: `x×${a}`, t: `${S.A}${a}${S.uA}の代金`, k: `x は ${A1}の値段。×${a} は ${a}${S.uA}分` },
+        { f: `x＋${b}`, t: `${A1}と${B1}の代金の合計`, k: `x は ${A1}、${b} は ${B1}の値段。＋は 合計` },
+        { f: `x${MI}${b}`, t: `${A1}と${B1}の値段のちがい`, k: 'ひき算は「ちがい」や「残り」を表す' },
+        { f: `（x＋${b}）×${a}`, t: `${A1}と${B1}を1組にして、${a}組買ったときの代金`, k: `（ ）の中は 1組の値段。×${a} は ${a}組分` },
+        { f: `1000${MI}x×${a}`, t: `1000円で ${S.A}を${a}${S.uA}買ったときのおつり`, k: `1000円から ${S.A}${a}${S.uA}の代金を ひいている → おつり` }
+    ];
+    const use = [F[0]].concat(shuffle(F.slice(1)).slice(0, 2));
+    const trap = { f: '', t: `${S.A}${c}${S.uA}と${S.B}${a}${S.uB}の代金の合計` };
+    const cards = shuffle(use.concat([trap])).map(o => ({ name: '', text: o.t, f: o.f }));
+    const lead = `1${S.uA} x 円の${S.A}と、1${S.uB} ${b}円の${S.B}があります。`;
+    return { lead: lead, scene: lead, answer: 'ぜんぶ できました！', cards: cards, kotoba: '',
+             choices: shuffle(use).map(o => ({ text: 'この式は、何を表していますか。', ask: o.f, expect: cards.findIndex(cd => cd.f === o.f), kotoba: o.k })) };
+}
+
+// まちがいを見つける：ゆうきさんの まちがった式 → ①どこが ちがうか えらぶ → ②正しい式を書く
+const MACHI_R = { op: '記号が ちがう', num: '数が ちがう', swap: 'x と y が 逆', order: '順番が 逆' };
+function makeMachigai() {
+    const a = rnd(3, 9), it = pick(ITEMS), n = pick([1000, 5000]), c = pick([100, 150, 200, 300]), d = rnd(3, 9);
+    const other = v => { let w; do { w = rnd(3, 9); } while (w === v); return w; };
+    const P = [
+        { fig: FIG.emo(it.e), scene: `1${it.u} x 円の${it.n}を ${a}${it.u}買います。代金は y 円です。`, kotoba: `1${it.u}の値段 × ${it.u}数 ＝ 代金`,
+          ok: [`x×${a}＝y`, `${a}×x＝y`], bad: { op: `x＋${a}＝y`, num: `x×${other(a)}＝y`, swap: `y×${a}＝x` } },
+        { fig: FIG.emo('💴'), scene: `x 円の品物を買って、${n}円札を1枚出しました。おつりは y 円です。`, kotoba: '出したお金 − 代金 ＝ おつり',
+          ok: [`${n}${MI}x＝y`], bad: { op: `${n}＋x＝y`, num: `${n === 1000 ? 5000 : 1000}${MI}x＝y`, order: `x${MI}${n}＝y` } },
+        { fig: FIG.emo('🍚'), scene: `x g の砂糖を ${c}g の容器に入れます。全体の重さは y g です。`, kotoba: '砂糖の重さ ＋ 容器の重さ ＝ 全体の重さ',
+          ok: [`x＋${c}＝y`, `${c}＋x＝y`], bad: { op: `x×${c}＝y`, num: `x＋${c + 50}＝y`, swap: `y＋${c}＝x` } },
+        { fig: FIG.emo('📖'), scene: `x ページの本を ${d}日間で読む予定です。1日に平均 y ページ読むことになります。`, kotoba: '全体のページ数 ÷ 日数 ＝ 1日のページ数',
+          ok: [`x÷${d}＝y`], bad: { op: `x×${d}＝y`, num: `x÷${other(d)}＝y`, swap: `y÷${d}＝x`, order: `${d}÷x＝y` } },
+        { fig: FIG.tri(), scene: '1辺の長さが x cm の正三角形のまわりの長さは y cm です。', kotoba: '1辺の長さ × 辺の数 ＝ まわりの長さ',
+          ok: ['x×3＝y', '3×x＝y'], bad: { op: 'x＋3＝y', num: 'x×4＝y', swap: 'y×3＝x' } }
+    ];
+    const p = pick(P), kind = pick(Object.keys(p.bad)), keys = shuffle(Object.keys(MACHI_R));
+    return { fig: p.fig, scene: `${p.scene}<br>ゆうきさんは、次の式に表しました。`, show: p.bad[kind], kotoba: p.kotoba,
+             opts: keys.map(k => MACHI_R[k]), optsText: true, choiceFirst: true, answer: `正しい式は ${p.ok[0]}`,
+             choices: [{ text: '① ゆうきさんの式は、どこがちがいますか。', expect: keys.indexOf(kind) }],
+             lines: [{ label: '② 式', text: '② 正しい式を書きましょう。', ans: p.ok }] };
+}
+
+// 文章題のヒント（2回め）：テープ図
+function tapeSeg(x, w, t, fill, dash) {
+    return `<rect x="${x}" y="30" width="${w}" height="32" fill="${fill}" stroke="#555" stroke-width="2"${dash ? ' stroke-dasharray="5 4"' : ''}/>` +
+           `<text x="${x + w / 2}" y="53" text-anchor="middle" font-size="19" font-weight="bold">${t}</text>`;
+}
+function tapeBr(x1, x2, up, t) {   // かっこ（up：上がわ）と ことば
+    const y = up ? 22 : 70, e = up ? 28 : 64;
+    return `<path d="M${x1} ${e} V${y} H${x2} V${e}" fill="none" stroke="#c62828" stroke-width="2"/>` +
+           `<text x="${(x1 + x2) / 2}" y="${up ? 16 : 91}" text-anchor="middle" font-size="18" font-weight="bold" fill="#c62828">${t}</text>`;
+}
+//   代金：[a円][a円][…][a円][b円]
+function tapeSum(a, b, nA, uA, nB) {
+    return `<svg viewBox="0 0 460 96">` +
+        tapeSeg(20, 80, `${a}円`, '#ffe0b2') + tapeSeg(100, 80, `${a}円`, '#ffe0b2') + tapeSeg(180, 70, '…', '#fff3e0', true) +
+        tapeSeg(250, 80, `${a}円`, '#ffe0b2') + tapeSeg(330, 110, `${b}円`, '#c8e6c9') +
+        tapeBr(20, 440, true, '代金の合計') + tapeBr(22, 326, false, `${nA} ${VX} ${uA}分`) + tapeBr(334, 438, false, nB) + `</svg>`;
+}
+//   1つ分：[x][x][x] ＝ 全体
+function tapeDiv(d, y, post, cnt) {
+    const w = 420 / d;
+    let h = `<svg viewBox="0 0 460 96">`;
+    for (let k = 0; k < d; k++) h += tapeSeg(20 + w * k, w, `${VX}${post}`, k ? '#e3f2fd' : '#bbdefb');
+    return h + tapeBr(20, 440, true, `全体 ${y}${post}`) + tapeBr(20, 440, false, cnt) + `</svg>`;
+}
+
+const MOJI_GEN = {};
+Object.keys(MOJI_POOL).forEach(k => { MOJI_GEN[k] = m => m ? MOJI_POOL[k][0](true) : pick(MOJI_POOL[k])(false); });
+
+// --- 計算タブ（式 ＝ ▢）の問題の作り方 ---
+//   モードごとに「記号」と「[a, b] を作る関数」を書く。答えは記号から自動で計算する
+const rnd = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));   // lo〜hi の整数
+const KEI_OP = { kei1: '＋', kei2: '−', kei3: '×', kei4: '÷' };
+const KEI_GEN = {
+    kei1: () => { const a = rnd(100, 899); return [a, rnd(100, 999 - a)]; },          // 3けた＋3けた（答えは999まで）
+    kei2: () => { const a = rnd(200, 999); return [a, rnd(100, a - 1)]; },            // 3けた−3けた
+    kei3: () => [rnd(12, 99), rnd(2, 9)],                                             // 2けた×1けた
+    kei4: () => { const b = rnd(2, 9); return [b * rnd(10, Math.floor(99 / b)), b]; } // 2けた÷1けた（わりきれる・商2けた）
+};
+const KEI_RANDOM = ['kei1', 'kei2', 'kei3', 'kei4'];   // 「ランダム」（kei5）でまぜるモード
+const KEI_CALC = { '＋': (a, b) => a + b, '−': (a, b) => a - b, '×': (a, b) => a * b, '÷': (a, b) => a / b };
+
+// ×÷＋− のキーを出すモード（式を入れるタブを作ったときに書く）
+const OP_PAD_MODES = Object.keys(MOJI_POOL);
+// テンキーの「.」を出すモード（小数をあつかうタブを作ったときに書く）
+const DOT_MODES = Object.keys(MOJI_POOL);
+
+// =====================================================================
+// ▲ 書きかえるのはここまで（テストの練習の設定は、下の ①せってい）▲
+// =====================================================================
+
+// --- 問題と状態 ---
+let divisor, dividend, q1, q2, q3, q, sub1, sub2, sub3;   // わり算の筆算の数
+let keiLay = null;        // 計算タブの1問ぶん（a, op, b, ansStr）
+let keiLast = '';         // 同じ問題を2回続けて出さないための記録
+let forceProblem = null;  // [a, b] 次の1問を固定する（見本問題）
+const isKei = m => /^kei\d+$/.test(m);
+let mojiLay = null;       // 文字と式の1問ぶん
+let mojiLast = '';        // 同じ問題を2回続けて出さないための記録
+const isMoji = m => !!MOJI_GEN[m];
+
+let state = 0;            // いま何番めの手順か（states[state]）
+let selectedCells = [];
+let states = [];          // 1問ぶんの手順の一覧
+let mode = '2digit';
+
+let comboCount = 0;
+let startTime = 0;
+let errorStats = { tateru: 0, kakeru: 0, hiku: 0, orosu: 0, other: 0 };
+
+// =====================================================================
+// 手順の一覧を作る
+//   type：action（たてる〜おろすのボタン）／click_cell（マスを1つ）／click_cells（マスをいくつか）／
+//         click_cells_group（数のかたまり）／input（テンキー）／drag_drop（おろす）／finish（おわり）
+// =====================================================================
+function generateStates() {
+    // 文字と式：式の▢を上から1つずつ（expr）／カードをえらぶ（choice）
+    if (isMoji(mode)) {
+        const L = mojiLay;
+        states = [];
+        const addChoices = () => (L.choices || []).forEach(c => states.push({ text: c.text, type: 'choice', expect: c.expect, ask: c.ask, kotoba: c.kotoba }));
+        if (L.choiceFirst) addChoices();   // まちがいを見つける：①えらぶ → ②式を書く
+        (L.lines || []).forEach((ln, i) => states.push(ln.pick
+            ? { text: ln.text, type: 'pick_var', line: i, expect: ln.pick, stage: 2 }
+            : { text: ln.text, type: 'expr', line: i, answers: ln.ans, stage: ln.stage === 1 ? 1 : 2 }));
+        if (!L.choiceFirst) addChoices();
+        states.push({ text: 'できました！', type: 'finish' });
+        states.forEach((st, i) => { st.id = i; });
+        return;
+    }
+    // 計算タブ：答えを左から1文字ずつテンキーで入れる
+    if (isKei(mode)) {
+        const L = keiLay;
+        states = [];
+        L.ansStr.split('').forEach((ch, i) => {
+            states.push({
+                text: (i === 0) ? "答えを、テンキーで入れよう。" : "つづきを入れよう。",
+                type: "input",
+                targetCell: `ans${i}`,
+                expect: ((c) => () => Number(c))(ch)
+            });
+        });
+        states.push({ text: "できました！", type: "finish" });
+        states.forEach((st, i) => { st.id = i; });
+        return;
+    }
+    if (mode === '2digit') {
+        states = [
+            { id: 0, text: "はじめに何をしますか。", type: "action", expect: "tateru" },
+            { id: 1, text: "商はAにたちますか、Bにたちますか。", type: "click_cell", expect: "r0-c3" },
+            { id: 2, text: "何をたてますか。", type: "input", expect: () => q1, targetCell: "r0-c3" },
+            { id: 3, text: "次に何をしますか。", type: "action", expect: "kakeru" },
+            { id: 4, text: "何と何をかけますか。", type: "click_cells", expect: ["r1-c2", "r0-c3"] },
+            { id: 5, text: "次に何をしますか。", type: "action", expect: "hiku" },
+            { id: 6, text: "何から何をひきますか。", type: "click_cells", expect: ["r1-c3", "r2-c3"] },
+            { id: 7, text: "次に何をしますか。", type: "action", expect: "orosu" },
+            { id: 8, text: "どこに何をおろしますか。", type: "drag_drop", source: "r1-c4", target: "r3-c4" },
+            { id: 9, text: "次に何をしますか。", type: "action", expect: "tateru" },
+            { id: 10, text: "何をたてますか。", type: "input", expect: () => q2, targetCell: "r0-c4" }
+        ];
+        if (q2 === 0) {
+            states.push({ id: 11, text: "答えは出ました！", type: "finish" });
+        } else {
+            states.push(
+                { id: 11, text: "次に何をしますか。", type: "action", expect: "kakeru" },
+                { id: 12, text: "何と何をかけますか。", type: "click_cells", expect: ["r1-c2", "r0-c4"] },
+                { id: 13, text: "次に何をしますか。", type: "action", expect: "hiku" },
+                { id: 14, text: "何から何をひきますか。", type: "click_cells_group", expectGroups: [ ["r3-c3", "r3-c4"], ["r4-c3", "r4-c4"] ] },
+                { id: 15, text: "答えは出ました！", type: "finish" }
+            );
+        }
+    } else if (mode === '3digit1') {
+        states = [
+            { id: 0, text: "はじめに何をしますか。", type: "action", expect: "tateru" },
+            { id: 1, text: "商はAにたちますか、Bにたちますか、Cにたちますか。", type: "click_cell", expect: "r0-c3" },
+            { id: 2, text: "何をたてますか。", type: "input", expect: () => q1, targetCell: "r0-c3" },
+            { id: 3, text: "次に何をしますか。", type: "action", expect: "kakeru" },
+            { id: 4, text: "何と何をかけますか。", type: "click_cells", expect: ["r1-c2", "r0-c3"] },
+            { id: 5, text: "次に何をしますか。", type: "action", expect: "hiku" },
+            { id: 6, text: "何から何をひきますか。", type: "click_cells", expect: ["r1-c3", "r2-c3"] },
+            { id: 7, text: "次に何をしますか。", type: "action", expect: "orosu" },
+            { id: 8, text: "どこに何をおろしますか。", type: "drag_drop", source: "r1-c4", target: "r3-c4" },
+            { id: 9, text: "次に何をしますか。", type: "action", expect: "tateru" },
+            { id: 10, text: "何をたてますか。", type: "input", expect: () => q2, targetCell: "r0-c4" },
+            { id: 11, text: "次に何をしますか。", type: "action", expect: "kakeru" },
+            { id: 12, text: "何と何をかけますか。", type: "click_cells", expect: ["r1-c2", "r0-c4"] },
+            { id: 13, text: "次に何をしますか。", type: "action", expect: "hiku" },
+            { id: 14, text: "何から何をひきますか。", type: "click_cells_group", expectGroups: [ ["r3-c3", "r3-c4"], ["r4-c3", "r4-c4"] ] },
+            { id: 15, text: "次に何をしますか。", type: "action", expect: "orosu" },
+            { id: 16, text: "どこに何をおろしますか。", type: "drag_drop", source: "r1-c5", target: "r5-c5" },
+            { id: 17, text: "次に何をしますか。", type: "action", expect: "tateru" },
+            { id: 18, text: "何をたてますか。", type: "input", expect: () => q3, targetCell: "r0-c5" }
+        ];
+        if (q3 === 0) {
+            states.push({ id: 19, text: "答えは出ました！", type: "finish" });
+        } else {
+            states.push(
+                { id: 19, text: "次に何をしますか。", type: "action", expect: "kakeru" },
+                { id: 20, text: "何と何をかけますか。", type: "click_cells", expect: ["r1-c2", "r0-c5"] },
+                { id: 21, text: "次に何をしますか。", type: "action", expect: "hiku" },
+                { id: 22, text: "何から何をひきますか。", type: "click_cells_group", expectGroups: [ ["r5-c4", "r5-c5"], ["r6-c4", "r6-c5"] ] },
+                { id: 23, text: "答えは出ました！", type: "finish" }
+            );
+        }
+    } else if (mode === '3digit2') {
+        states = [
+            { id: 0, text: "はじめに何をしますか。", type: "action", expect: "tateru" },
+            { id: 1, text: "商はAにたちますか、Bにたちますか、Cにたちますか。", type: "click_cell", expect: "r0-c4" },
+            { id: 2, text: "何をたてますか。", type: "input", expect: () => q1, targetCell: "r0-c4" },
+            { id: 3, text: "次に何をしますか。", type: "action", expect: "kakeru" },
+            { id: 4, text: "何と何をかけますか。", type: "click_cells", expect: ["r1-c2", "r0-c4"] },
+            { id: 5, text: "次に何をしますか。", type: "action", expect: "hiku" },
+            { id: 6, text: "何から何をひきますか。", type: "click_cells_group", expectGroups: [ ["r1-c3", "r1-c4"], ["r2-c3", "r2-c4"] ] },
+            { id: 7, text: "次に何をしますか。", type: "action", expect: "orosu" },
+            { id: 8, text: "どこに何をおろしますか。", type: "drag_drop", source: "r1-c5", target: "r3-c5" },
+            { id: 9, text: "次に何をしますか。", type: "action", expect: "tateru" },
+            { id: 10, text: "何をたてますか。", type: "input", expect: () => q2, targetCell: "r0-c5" }
+        ];
+        if (q2 === 0) {
+            states.push({ id: 11, text: "答えは出ました！", type: "finish" });
+        } else {
+            states.push(
+                { id: 11, text: "次に何をしますか。", type: "action", expect: "kakeru" },
+                { id: 12, text: "何と何をかけますか。", type: "click_cells", expect: ["r1-c2", "r0-c5"] },
+                { id: 13, text: "次に何をしますか。", type: "action", expect: "hiku" },
+                { id: 14, text: "何から何をひきますか。", type: "click_cells_group", expectGroups: [ ["r3-c4", "r3-c5"], ["r4-c4", "r4-c5"] ] },
+                { id: 15, text: "答えは出ました！", type: "finish" }
+            );
+        }
+    }
+}
+
+// =====================================================================
+// 問題を作る
+// =====================================================================
+function generateProblem() {
+    // --- 文字と式 ---
+    if (isMoji(mode)) {
+        let p = null, key = '';
+        for (let t = 0; t < 20; t++) {
+            p = MOJI_GEN[mode](!!forceProblem);
+            key = JSON.stringify([p.scene, p.lines, p.cards, p.choices]);
+            if (forceProblem || key !== mojiLast) break;
+        }
+        mojiLast = key;
+        p.typed = (p.lines || []).map(() => '');
+        if (!p.answer && p.lines) {
+            const last = p.lines[p.lines.length - 1];
+            p.answer = (last.pre || '') + last.ans[0] + (last.post || '');
+        }
+        mojiLay = p;
+        return;
+    }
+    // --- 計算タブ ---
+    if (isKei(mode)) {
+        const key = (mode === 'kei5') ? KEI_RANDOM[Math.floor(Math.random() * KEI_RANDOM.length)] : mode;
+        let ab = null;
+        if (forceProblem && KEI_GEN[mode]) ab = forceProblem;          // 見本問題（ランダムでは使わない）
+        if (!ab) {
+            // 前と同じ問題は出さない（20回まで作りなおす）
+            for (let t = 0; t < 20; t++) {
+                ab = KEI_GEN[key]();
+                if (`${key}:${ab[0]}:${ab[1]}` !== keiLast) break;
+            }
+        }
+        keiLast = `${key}:${ab[0]}:${ab[1]}`;
+        const op = KEI_OP[key];
+        const ans = KEI_CALC[op](ab[0], ab[1]);
+        keiLay = { key: key, a: ab[0], b: ab[1], op: op, ans: ans, ansStr: String(ans) };
+        return;
+    }
+
+    // --- わり算の筆算（1けたでわる）---
+    divisor = Math.floor(Math.random() * 8) + 2; // 2~9
+
+    if (mode === '2digit') {
+        let maxQ = Math.floor(99 / divisor);
+        q = Math.floor(Math.random() * (maxQ - 10 + 1)) + 10; // 10 ~ maxQ (確実にあまらず、十の位に商が立つ)
+    } else if (mode === '3digit1') {
+        let minQ = 100;
+        let maxQ = Math.floor(999 / divisor);
+        q = Math.floor(Math.random() * (maxQ - minQ + 1)) + minQ;
+    } else if (mode === '3digit2') {
+        let minQ = Math.ceil(100 / divisor);
+        if (minQ < 10) minQ = 10;
+        let maxQ = 99;
+        q = Math.floor(Math.random() * (maxQ - minQ + 1)) + minQ;
+    }
+
+    dividend = divisor * q;
+
+    if (mode === '2digit') {
+        q1 = Math.floor(q / 10);
+        q2 = q % 10;
+        sub1 = q1 * divisor;
+        sub2 = q2 * divisor;
+    } else if (mode === '3digit1') {
+        q1 = Math.floor(q / 100);
+        q2 = Math.floor((q % 100) / 10);
+        q3 = q % 10;
+        sub1 = q1 * divisor;
+        sub2 = q2 * divisor;
+        sub3 = q3 * divisor;
+    } else if (mode === '3digit2') {
+        q1 = Math.floor(q / 10);
+        q2 = q % 10;
+        sub1 = q1 * divisor;
+        sub2 = q2 * divisor;
+    }
+}
+
+// --- Web Audio API ---
+let audioCtx;
+const correctAudio = new Audio('https://github.com/byakusen/gogelige.quiz/raw/refs/heads/main/quiz_seikai.mp3');
+
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    correctAudio.load();
+}
+document.addEventListener('pointerdown', initAudio, { once: true });
+
+function playSound(type) {
+    if (type === 'correct') {
+        correctAudio.currentTime = 0;
+        correctAudio.play().catch(e => console.error("Audio play error:", e));
+        return;
+    }
+
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    osc.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    const now = audioCtx.currentTime;
+
+    if (type === 'wrong') { // ブブー
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.setValueAtTime(130, now + 0.1);
+        gainNode.gain.setValueAtTime(0.3, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+    } else if (type === 'click') { // ピッ
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, now);
+        gainNode.gain.setValueAtTime(0.1, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        osc.start(now);
+        osc.stop(now + 0.1);
+    }
+}
+
+// おわったときに、指示の文のところに出す答え
+function answerText() {
+    if (isMoji(mode)) return mojiLay.choices ? mojiLay.answer : `答え（ ${mojiLay.answer} ）`;
+    if (isKei(mode)) return `${keiLay.a} ${keiLay.op} ${keiLay.b} ＝ ${keiLay.ansStr}`;
+    return `答え（ ${q} ）`;
+}
+
+// ===== 文字と式 =====
+// x・y を ななめの字に
+const fmt = t => String(t).replace(/[xy]/g, '<i class="var">$&</i>');
+
+// 問題文・式の▢・カードをならべる（1問ごとに1回だけ）
+function renderMoji() {
+    const L = mojiLay;
+    let h = '';
+    if (L.cards) {
+        if (L.lead) h += `<div class="moji-scene">${L.leadFig ? `<div class="moji-fig">${L.leadFig}</div>` : ''}<div class="moji-text">${fmt(L.lead)}</div></div>`;   // 式を読む：場面の文
+        h += `<div class="moji-ask" id="moji-ask"></div><div class="bamen-cards">`;
+        L.cards.forEach((c, k) => {
+            h += `<button class="bamen-card${c.name ? '' : ' noname'}" id="bamen-c${k}" data-choice="${k}">${c.name ? `<div class="bc-name">${c.name}さん</div>` : ''}<div>${unitMark(fmt(c.text))}</div><div class="bc-badge" id="bamen-b${k}"></div></button>`;
+        });
+        h += `</div><div class="moji-kotoba" id="moji-kotoba">${fmt(L.kotoba)}</div>`;   // ヒントの文は カードの下（カードが 下に ずれない）
+    } else if (L.rel) {
+        // ① 関係の式を書く
+        h += `<div id="moji-st1"><div class="moji-scene">${L.fig ? `<div class="moji-fig">${L.fig}</div>` : ''}<div class="moji-text">${fmt(L.scene)}` +
+             `<div class="moji-kotoba" id="moji-kotoba">${fmt(L.kotoba)}</div>${L.tape ? `<div class="moji-tape" id="moji-tape">${L.tape}</div>` : ''}</div></div><div class="moji-lines" style="margin-top:14px">`;
+        L.lines.forEach((ln, i) => { if (ln.stage === 1) h += mojiRow(ln, i); });
+        h += '</div></div>';
+        // ② 式を大きく出して、数をあてはめる
+        h += `<div id="moji-st2" style="display:none"><div class="moji-rel" id="moji-rel"></div>` +
+             `<div class="moji-q">${fmt(L.q2)}<div class="moji-kotoba">${fmt(L.kotoba2)}</div></div><div class="moji-lines">`;
+        L.lines.forEach((ln, i) => { if (ln.stage !== 1 && !ln.pick && !ln.sub) h += mojiRow(ln, i); });
+        h += '</div></div>';
+    } else {
+        h += `<div class="moji-scene">${L.fig ? `<div class="moji-fig">${L.fig}</div>` : ''}<div class="moji-text">${unitMark(fmt(L.scene))}` +
+             `${L.kotoba ? `<div class="moji-kotoba" id="moji-kotoba">${fmt(L.kotoba)}</div>` : ''}</div></div>`;
+        if (L.show) h += `<div class="moji-ask moji-show" id="moji-show">${fmt(L.show)}</div>`;   // まちがいを見つける：ゆうきさんの式
+        if (L.opts) {
+            h += '<div class="bamen-opts">';
+            L.opts.forEach((o, k) => { h += `<button class="bamen-opt${L.optsText ? ' txt' : ''}" id="bamen-o${k}" data-choice="${k}">${fmt(o)}</button>`; });
+            h += '</div>';
+        }
+        if (L.lines) {
+            h += '<div class="moji-lines">';
+            L.lines.forEach((ln, i) => {
+                h += `<div class="moji-line"><span class="moji-label${ln.label ? '' : ' blank'}">${ln.label || '－'}</span>` +
+                     `${ln.pre ? `<span>${fmt(ln.pre)}</span>` : ''}<div class="ans-frame moji-frame" id="moji-f${i}"></div>` +
+                     `${ln.post ? `<span class="moji-post">${ln.post}</span>` : ''}</div>`;
+            });
+            h += '</div>';
+        }
+    }
+    document.getElementById('moji-panel').innerHTML = h;
+    document.getElementById('moji-panel').classList.remove('show-unit');   // 単位の ◯は 新しい問題で 消す
+    document.getElementById('moji-panel').classList.toggle('machi', !!L.show);   // まちがいを見つける：つめて 1画面に
+}
+
+// 式の▢の行（数をあてはめる問題で使う）
+function mojiRow(ln, i) {
+    return `<div class="moji-line"><span class="moji-label${ln.label ? '' : ' blank'}">${ln.label || '－'}</span>` +
+           `${ln.pre ? `<span>${fmt(ln.pre)}</span>` : ''}<div class="ans-frame moji-frame" id="moji-f${i}"></div>` +
+           `${ln.post ? `<span class="moji-post">${ln.post}</span>` : ''}</div>`;
+}
+
+// ② の大きな式：子どもが書いた式を1文字（数はまとめて）ずつならべる。x・y はおせるボタン、その下に数の▢
+function buildRel() {
+    const L = mojiLay;
+    const pv = (L.lines.find(ln => ln.pick) || {}).pick;
+    const si = L.lines.findIndex(ln => ln.sub);
+    const toks = L.typed[0].match(/\d+(\.\d+)?|./g);
+    document.getElementById('moji-rel').innerHTML = toks.map(t => (t === 'x' || t === 'y') && !pv
+        ? `<span class="rel-col"><span class="rel-tok"><i class="var">${t}</i></span></span>`   // おす手順が ないときは ふつうの字
+        : (t === 'x' || t === 'y')
+        ? `<span class="rel-col"><button class="rel-var" id="rel-v-${t}" data-var="${t}">${t}</button>` +
+          (t === pv ? `<div class="ans-frame moji-frame rel-sub" id="moji-f${si}"></div>` : '') + '</span>'
+        : `<span class="rel-col"><span class="rel-tok">${t}</span></span>`).join('');
+    L.relBuilt = true;
+}
+
+// ===== 計算のヒント：横に出す筆算 =====
+// 1マス ＝ { ch, dot（右下に小数点）, top（上に線）, bot（下に線）, paren（左に「）」）}
+function hsGrid(rows, cols) {
+    let h = `<div class="hs-grid" style="grid-template-columns: repeat(${cols}, var(--hs))">`;
+    rows.forEach(r => r.forEach(c => {
+        const cl = ['hs-c', c.dot ? 'dot' : '', c.top ? 'top' : '', c.bot ? 'bot' : '', c.paren ? 'paren' : ''].join(' ');
+        h += `<span class="${cl}">${c.ch || ''}</span>`;
+    }));
+    return h + '</div>';
+}
+// 数を「右そろえ」で1行に（d：小数点を取った数字、dp：小数点の後ろのけた数）
+function hsDigits(v) {
+    const t = String(v), i = t.indexOf('.');
+    return { d: t.replace('.', ''), dp: i < 0 ? 0 : t.length - i - 1 };
+}
+function hsRow(cols, str, end, opt) {
+    const r = Array.from({ length: cols }, () => ({}));
+    const v = hsDigits(str);
+    v.d.split('').forEach((ch, k) => {
+        const c = r[end - v.d.length + 1 + k];
+        c.ch = ch;
+        if (v.dp && k === v.d.length - v.dp - 1) c.dot = true;
+    });
+    if (opt && opt.bot) r.forEach((c, k) => { if (k >= end - v.d.length + 1 - (opt.from || 0) && k <= end) c.bot = true; });
+    return r;
+}
+// たし算・ひき算・かけ算（2つめの数は1けた〜3けた）
+function hsAddMul(a, op, b, opt) {
+    let res;
+    if (op === '×') {
+        const A = hsDigits(a), B = hsDigits(b), dp = A.dp + B.dp;
+        let t = String(Number(A.d) * Number(B.d));
+        while (t.length <= dp) t = '0' + t;
+        res = dp ? t.slice(0, t.length - dp) + '.' + t.slice(t.length - dp) : t;
+    } else {
+        res = num(op === '＋' ? a + b : a - b);
+    }
+    const w = Math.max(hsDigits(a).d.length, hsDigits(b).d.length, hsDigits(res).d.length) + 1;   // 左はしの1マスは 記号（×＋−）だけの列
+    const cols = w, end = cols - 1;   // いちばん左の列は 記号（×＋−）だけ（いちばん長い数の すぐ左）
+    const r2 = hsRow(cols, b, end);
+    r2[0].ch = op;
+    r2.forEach(c => { c.bot = true; });
+    const blank = () => Array.from({ length: cols }, () => ({}));
+    const o = opt || {};   // noAns：答えを 書かない（1回めの ヒント）／hideA：上の数も 書かない（前の 計算の 答えなので）
+    return hsGrid([o.hideA ? blank() : hsRow(cols, a, end), r2, o.noAns ? blank() : hsRow(cols, res, end)], cols);
+}
+// わり算（わる数は1けた）：商・わられる数・かけた数・ひいた数 を ならべる
+function hsDiv(n, d, setup) {
+    const D = String(n).split('').map(Number), L = D.length, cols = L + 1;
+    if (setup) {   // 1回めの ヒント：わる数・わられる数の 形だけ（商は 書かない）
+        const top0 = Array.from({ length: cols }, (_, k) => ({ bot: k > 0 }));
+        const mid0 = Array.from({ length: cols }, (_, k) => k ? { ch: String(D[k - 1]), paren: k === 1 } : { ch: String(d) });
+        return hsGrid([top0, mid0], cols);
+    }
+    const q = Array(L).fill('');
+    const rows = [];
+    let cur = 0, started = false;
+    for (let i = 0; i < L; i++) {
+        cur = cur * 10 + D[i];
+        if (!started && cur < d && i < L - 1) continue;
+        const qd = Math.floor(cur / d);
+        q[i] = String(qd);
+        if (started && qd === 0 && i < L - 1) continue;          // 商に0がたつ → 次の数をおろす
+        if (started) rows.push(hsRow(cols, String(cur), i + 1));  // ひいた数（おろした数をつけて）
+        started = true;
+        const prod = qd * d, rem = cur - prod;
+        rows.push(hsRow(cols, String(prod), i + 1, { bot: true }));
+        if (rem === 0 && D.slice(i + 1).every(x => x === 0)) {    // あとは0だけ → 商に0をつけて おわり
+            for (let k = i + 1; k < L; k++) q[k] = '0';
+            rows.push(hsRow(cols, '0', i + 1));
+            break;
+        }
+        if (i === L - 1) rows.push(hsRow(cols, String(rem), i + 1));
+        cur = rem;
+    }
+    const top = Array.from({ length: cols }, (_, k) => ({ ch: k ? q[k - 1] : '', bot: k > 0 }));
+    const mid = Array.from({ length: cols }, (_, k) => k ? { ch: String(D[k - 1]), paren: k === 1 } : { ch: String(d) });
+    return hsGrid([top, mid].concat(rows), cols);
+}
+function hissanHTML(c, lv, k) {   // lv 1：答えの 手前まで／lv 2：答えまで
+    const one = lv === 1;
+    return `<div class="hs-one">${c[1] === '÷' ? hsDiv(c[0], c[2], one) : hsAddMul(c[0], c[1], c[2], { noAns: one, hideA: one && k > 0 })}</div>`;
+}
+// ヒント：その段の横に筆算を出す
+function showHissan(i) {
+    const f = document.getElementById('moji-f' + i);
+    if (!f) return;
+    const old = f.parentElement.querySelector('.hs-box');
+    if (old) {   // 2回め：答えまで 書いた 筆算に する
+        if (old.dataset.lv === '1') { old.innerHTML = mojiLay.lines[i].calc.map((c, k) => hissanHTML(c, 2, k)).join(''); old.dataset.lv = '2'; }
+        return;
+    }
+    const box = document.createElement('div');
+    box.className = 'hs-box' + (mojiLay.lines[i].calc.length > 1 ? ' hs-inline' : '');   // 筆算が2つ → 答えの右に ならべて置く
+    box.dataset.line = i;
+    box.dataset.lv = '1';   // 1回め：答えの 手前まで
+    box.innerHTML = mojiLay.lines[i].calc.map((c, k) => hissanHTML(c, 1, k)).join('');
+    f.parentElement.appendChild(box);
+}
+
+// そのステートで画面に書きこむこと
+function drawMoji(s) {
+    const L = mojiLay;
+    if (!L) return;
+    const fin = (s.type === 'finish');
+    document.querySelectorAll('#moji-panel .hs-box').forEach(b => { if (fin || +b.dataset.line !== s.line) b.remove(); });   // 筆算は その段の あいだだけ
+    if (L.rel) {
+        const st2 = fin || s.stage === 2;
+        document.getElementById('moji-st1').style.display = st2 ? 'none' : '';
+        document.getElementById('moji-st2').style.display = st2 ? '' : 'none';
+        if (st2 && !L.relBuilt) buildRel();
+        if (st2) {
+            const pi = L.lines.findIndex(ln => ln.pick);
+            const picked = pi >= 0 && (fin || state > pi);
+            const v = pi >= 0 && document.getElementById('rel-v-' + L.lines[pi].pick);
+            if (v) v.classList.toggle('struck', picked);
+            const sub = document.getElementById('moji-f' + L.lines.findIndex(ln => ln.sub));
+            if (sub) sub.style.visibility = picked ? 'visible' : 'hidden';
+        }
+    }
+    (L.lines || []).forEach((ln, i) => {
+        const el = document.getElementById('moji-f' + i);
+        if (!el || !ln.ans) return;
+        el.innerHTML = fmt(L.typed[i]);
+        el.classList.toggle('active', !fin && s.line === i);
+        el.classList.toggle('filled', ln.ans.includes(L.typed[i]));
+    });
+    if (L.choices) {
+        const done = fin ? L.choices.length : state;
+        L.choices.forEach((c, j) => {
+            if (j >= done) return;
+            if (L.cards) {
+                document.getElementById('bamen-c' + c.expect).classList.add('done');
+                document.getElementById('bamen-b' + c.expect).innerHTML = fmt(c.ask);
+            } else {
+                document.getElementById('bamen-o' + c.expect).classList.add('done');
+            }
+        });
+        const ask = document.getElementById('moji-ask');
+        if (ask) ask.innerHTML = fin ? '🎉 ぜんぶ できた！' : fmt(s.ask);
+        const kb = document.getElementById('moji-kotoba');
+        if (kb && s.kotoba && kb.dataset.k !== String(state)) {   // 式を読む：ヒントの文は 1つの式ごとに かえる（次の式で いったん 消す）
+            kb.classList.remove('show');
+            kb.innerHTML = fmt(s.kotoba);
+            kb.dataset.k = state;
+        }
+        const sh = document.getElementById('moji-show');
+        if (sh) sh.classList.toggle('done', fin || state >= L.choices.length);   // まちがいを見つける：①が おわったら ✕
+    }
+}
+
+// ===== 計算タブ =====
+// 数字1文字ぶんの箱（idは「cell-」で始めるので、テンキーの入力のしくみをそのまま使える）
+function tenBox(ch, n) {
+    const b = document.createElement('div');
+    b.className = 'ten-box';
+    b.id = 'cell-ans' + n;
+    return b;
+}
+
+// 式と、答えを入れる箱をならべる（1問ごとに1回だけ）
+function renderKeiBoxes() {
+    const L = keiLay;
+    document.getElementById('kei-q').innerText = `${L.a} ${L.op} ${L.b}`;
+    const host = document.getElementById('kei-g0');
+    host.innerHTML = '';
+    L.ansStr.split('').forEach((ch, i) => host.appendChild(tenBox(ch, i)));
+}
+
+// そのステートで画面に書きこむこと（入れた文字だけを▢の中に出す）
+function drawKei(s) {
+    const L = keiLay;
+    if (!L) return;
+    const done = (s.type === 'finish') ? L.ansStr.length : state;
+    const host = document.getElementById('kei-g0');
+    host.classList.toggle('active', done < L.ansStr.length);
+    host.classList.toggle('filled', done >= L.ansStr.length);
+    L.ansStr.split('').forEach((ch, i) => {
+        const el = document.getElementById('cell-ans' + i);
+        if (!el) return;
+        const shown = i < done;
+        el.style.display = shown ? '' : 'none';
+        el.innerHTML = shown ? `<span>${ch}</span>` : '';
+    });
+}
+
+// =====================================================================
+// 画面を、いまの手順（states[state]）に合わせる
+// =====================================================================
+function updateUI() {
+    const s = states[state];
+    document.getElementById('instruction').innerText = s.text;
+
+    // ヒントと選択状態のクリア
+    document.querySelectorAll('.hint-glow').forEach(el => el.classList.remove('hint-glow'));
+    document.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
+    document.querySelectorAll('.selected-group-left').forEach(el => el.classList.remove('selected-group-left'));
+    document.querySelectorAll('.selected-group-mid').forEach(el => el.classList.remove('selected-group-mid'));
+    document.querySelectorAll('.selected-group-right').forEach(el => el.classList.remove('selected-group-right'));
+    selectedCells = [];
+
+    // ガイド矢印のクリア
+    document.querySelectorAll('.guide-arrow').forEach(el => el.remove());
+
+    // テンキーは、数を入れる手順のときだけ出す
+    const numpad = document.getElementById('numpad');
+    if (s.type === 'input' || s.type === 'expr') {
+        numpad.classList.add('visible');
+    } else {
+        numpad.classList.remove('visible');
+    }
+    // テンキーの「.」と、×÷＋− のキー
+    const dotBtn = document.querySelector('.num-btn.dot-btn');
+    if (dotBtn) dotBtn.style.visibility = DOT_MODES.includes(mode) ? '' : 'hidden';
+    document.getElementById('op-pad').classList.toggle('visible', OP_PAD_MODES.includes(mode) && (s.type === 'input' || s.type === 'expr'));
+
+    // ===== 文字と式の描画。ここで完結して return =====
+    if (isMoji(mode)) {
+        drawMoji(s);
+        if (s.type === 'finish') {
+            document.getElementById('instruction').innerText = answerText();
+            if (!document.getElementById('hanamaru').classList.contains('show')) {
+                showClearEffect();
+            }
+        }
+        return;
+    }
+
+    // ===== 計算タブ専用の描画。ここで完結して return =====
+    if (isKei(mode)) {
+        drawKei(s);
+        if (s.type === 'finish') {
+            document.getElementById('instruction').innerText = answerText();
+            if (!document.getElementById('hanamaru').classList.contains('show')) {
+                showClearEffect();
+            }
+        }
+        return;
+    }
+
+    // ===== わり算の筆算：ステートごとの描画更新 =====
+    if (state === 1) {
+        if (mode === '2digit') {
+            document.getElementById('cell-r0-c3').innerHTML = '<span class="red-text">A</span>';
+            document.getElementById('cell-r0-c4').innerHTML = '<span class="red-text">B</span>';
+        } else {
+            document.getElementById('cell-r0-c3').innerHTML = '<span class="red-text">A</span>';
+            document.getElementById('cell-r0-c4').innerHTML = '<span class="red-text">B</span>';
+            document.getElementById('cell-r0-c5').innerHTML = '<span class="red-text">C</span>';
+        }
+    }
+    if (state === 2) {
+        if (mode === '2digit') {
+            document.getElementById('cell-r0-c3').innerHTML = '<div class="box-input"></div>';
+            document.getElementById('cell-r0-c4').innerHTML = ''; // Bを消す
+        } else if (mode === '3digit1') {
+            document.getElementById('cell-r0-c3').innerHTML = '<div class="box-input"></div>';
+            document.getElementById('cell-r0-c4').innerHTML = '';
+            document.getElementById('cell-r0-c5').innerHTML = '';
+        } else if (mode === '3digit2') {
+            document.getElementById('cell-r0-c3').innerHTML = '';
+            document.getElementById('cell-r0-c4').innerHTML = '<div class="box-input"></div>';
+            document.getElementById('cell-r0-c5').innerHTML = '';
+        }
+    }
+    if (state === 5) { // かけ算1完了
+        if (mode === '3digit1') {
+            document.getElementById('cell-r2-c3').innerText = sub1;
+            document.getElementById('cell-r2-c3').classList.remove('border-hidden');
+        } else if (mode === '3digit2') {
+            const prod = sub1;
+            document.getElementById('cell-r2-c3').innerText = Math.floor(prod / 10) || '';
+            document.getElementById('cell-r2-c4').innerText = prod % 10;
+            document.getElementById('cell-r2-c3').classList.remove('border-hidden');
+            document.getElementById('cell-r2-c4').classList.remove('border-hidden');
+        } else {
+            if (sub1 >= 10) {
+                document.getElementById('cell-r2-c2').innerText = Math.floor(sub1 / 10);
+                document.getElementById('cell-r2-c3').innerText = sub1 % 10;
+                document.getElementById('cell-r2-c2').classList.remove('border-hidden');
+                document.getElementById('cell-r2-c3').classList.remove('border-hidden');
+            } else {
+                document.getElementById('cell-r2-c3').innerText = sub1;
+                document.getElementById('cell-r2-c3').classList.remove('border-hidden');
+            }
+        }
+    }
+    if (state === 7) { // ひき算1完了
+        if (mode === '3digit1') {
+            const minuend = Math.floor(dividend / 100);
+            const diff = minuend - sub1;
+            document.getElementById('cell-r3-c3').innerText = diff > 0 ? diff : '';
+        } else if (mode === '3digit2') {
+            const minuend = Math.floor(dividend / 10);
+            const diff = minuend - sub1;
+            document.getElementById('cell-r3-c4').innerText = diff > 0 ? diff : '';
+        } else {
+            const minuend = Math.floor(dividend / 10);
+            const diff = minuend - sub1;
+            document.getElementById('cell-r3-c3').innerText = diff > 0 ? diff : '';
+        }
+    }
+    if (state === 8) { // おろす待機
+        if (mode === '3digit1') {
+            const cell = document.getElementById('cell-r1-c4');
+            const numToDrop = Math.floor((dividend % 100) / 10);
+            cell.innerHTML = `<span class="draggable-span" id="drag-target-span">${numToDrop}</span>`;
+            initDragDrop('drag-target-span', 'cell-r3-c4');
+        } else if (mode === '3digit2') {
+            const cell = document.getElementById('cell-r1-c5');
+            const numToDrop = dividend % 10;
+            cell.innerHTML = `<span class="draggable-span" id="drag-target-span">${numToDrop}</span>`;
+            initDragDrop('drag-target-span', 'cell-r3-c5');
+        } else if (mode === '2digit') {
+            const cell = document.getElementById('cell-r1-c4');
+            cell.innerHTML = `<span class="draggable-span" id="drag-target-span">${dividend % 10}</span>`;
+            initDragDrop('drag-target-span', 'cell-r3-c4');
+        }
+    }
+    if (state === 9) { // おろす完了
+        if (mode === '3digit1') {
+            const numToDrop = Math.floor((dividend % 100) / 10);
+            document.getElementById('cell-r1-c4').innerText = numToDrop;
+            document.getElementById('cell-r3-c4').innerText = numToDrop;
+        } else if (mode === '3digit2') {
+            const numToDrop = dividend % 10;
+            document.getElementById('cell-r1-c5').innerText = numToDrop;
+            document.getElementById('cell-r3-c5').innerText = numToDrop;
+        } else if (mode === '2digit') {
+            document.getElementById('cell-r1-c4').innerText = dividend % 10;
+            document.getElementById('cell-r3-c4').innerText = dividend % 10;
+        }
+    }
+    if (state === 10) { // 2回目のたてる
+        if (mode === '3digit2') {
+            document.getElementById('cell-r0-c5').innerHTML = '<div class="box-input"></div>';
+        } else if (mode === '2digit') {
+            document.getElementById('cell-r0-c4').innerHTML = '<div class="box-input"></div>';
+        }
+    }
+    if (state === 13) { // かけ算2完了
+        if (mode === '3digit1') {
+            const prod = sub2;
+            document.getElementById('cell-r4-c3').innerText = Math.floor(prod / 10) || '';
+            document.getElementById('cell-r4-c4').innerText = prod % 10;
+            document.getElementById('cell-r4-c3').classList.remove('border-hidden');
+            document.getElementById('cell-r4-c4').classList.remove('border-hidden');
+        } else if (mode === '3digit2') {
+            const prod = sub2;
+            document.getElementById('cell-r4-c4').innerText = Math.floor(prod / 10) || '';
+            document.getElementById('cell-r4-c5').innerText = prod % 10;
+            document.getElementById('cell-r4-c4').classList.remove('border-hidden');
+            document.getElementById('cell-r4-c5').classList.remove('border-hidden');
+        } else {
+            const prod = q2 * divisor;
+            document.getElementById('cell-r4-c3').innerText = Math.floor(prod / 10) || '';
+            document.getElementById('cell-r4-c4').innerText = prod % 10;
+            document.getElementById('cell-r4-c3').classList.remove('border-hidden');
+            document.getElementById('cell-r4-c4').classList.remove('border-hidden');
+        }
+    }
+    if (state === 15) { // ひき算2完了
+        if (mode === '3digit1') {
+            const minuend1 = (parseInt(document.getElementById('cell-r3-c3').innerText) || 0) * 10
+                           + (parseInt(document.getElementById('cell-r3-c4').innerText) || 0);
+            const diff = minuend1 - sub2;
+            document.getElementById('cell-r5-c4').innerText = diff > 0 ? diff : '';
+        } else if (mode === '3digit2') {
+            document.getElementById('cell-r5-c5').innerText = '0';
+            document.getElementById('instruction').innerText = answerText();
+            showClearEffect();
+        } else {
+            document.getElementById('cell-r5-c4').innerText = '0';
+            document.getElementById('instruction').innerText = answerText();
+            showClearEffect();
+        }
+    }
+
+    // 3けた÷1けた（商3けた）の3回目
+    if (mode === '3digit1') {
+        if (state === 16) {
+            const cell = document.getElementById('cell-r1-c5');
+            const numToDrop = dividend % 10;
+            cell.innerHTML = `<span class="draggable-span" id="drag-target-span">${numToDrop}</span>`;
+            initDragDrop('drag-target-span', 'cell-r5-c5');
+        }
+        if (state === 17) {
+            const numToDrop = dividend % 10;
+            document.getElementById('cell-r1-c5').innerText = numToDrop;
+            document.getElementById('cell-r5-c5').innerText = numToDrop;
+        }
+        if (state === 18) {
+            document.getElementById('cell-r0-c5').innerHTML = '<div class="box-input"></div>';
+        }
+        if (state === 21) {
+            const prod = sub3;
+            document.getElementById('cell-r6-c4').innerText = Math.floor(prod / 10) || '';
+            document.getElementById('cell-r6-c5').innerText = prod % 10;
+            document.getElementById('cell-r6-c4').classList.remove('border-hidden');
+            document.getElementById('cell-r6-c5').classList.remove('border-hidden');
+        }
+        if (state === 23) {
+            document.getElementById('cell-r7-c5').innerText = '0';
+            document.getElementById('instruction').innerText = answerText();
+            showClearEffect();
+        }
+    }
+
+    // おわり：答えを出して、はなまる（すでに出ていれば出さない）
+    if (s.type === 'finish') {
+        document.getElementById('instruction').innerText = answerText();
+        if (!document.getElementById('hanamaru').classList.contains('show')) {
+            showClearEffect();
+        }
+    }
+
+    // おろす：おろす先に ↓
+    if (s.type === 'drag_drop') {
+        const targetCell = document.getElementById(`cell-${s.target}`);
+        if (targetCell && !targetCell.querySelector('.guide-arrow')) {
+            const arrow = document.createElement('div');
+            arrow.className = 'guide-arrow';
+            arrow.innerText = '↓';
+            targetCell.appendChild(arrow);
+        }
+    }
+}
+
+// --- ドラッグ＆ドロップ（おろす）---
+function initDragDrop(spanId, targetId) {
+    const span = document.getElementById(spanId);
+    let isDragging = false;
+    let startX, startY;
+
+    span.onpointerdown = (e) => {
+        if (states[state].type !== 'drag_drop') return;
+        isDragging = true;
+        span.setPointerCapture(e.pointerId);
+        startX = e.clientX;
+        startY = e.clientY;
+        span.style.position = 'relative';
+        span.classList.remove('hint-glow');
+        playSound('click');
+    };
+
+    span.onpointermove = (e) => {
+        if (!isDragging) return;
+        const dy = e.clientY - startY;
+        span.style.transform = `translate(0px, ${dy}px)`;
+    };
+
+    span.onpointerup = (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        span.releasePointerCapture(e.pointerId);
+
+        const targetEl = document.getElementById(targetId);
+        const targetRect = targetEl.getBoundingClientRect();
+        const spanRect = span.getBoundingClientRect();
+
+        // 中心点距離によるスナップ判定
+        const spanCX = spanRect.left + spanRect.width / 2;
+        const spanCY = spanRect.top + spanRect.height / 2;
+        const targetCX = targetRect.left + targetRect.width / 2;
+        const targetCY = targetRect.top + targetRect.height / 2;
+
+        if (Math.hypot(spanCX - targetCX, spanCY - targetCY) < 50) {
+            playSound('click');
+            state++;
+            updateUI();
+        } else {
+            handleWrong(spanId);
+            span.style.transition = 'transform 0.3s';
+            span.style.transform = 'translate(0px, 0px)';
+            setTimeout(() => { span.style.transition = ''; }, 300);
+        }
+    };
+}
+
+// --- まちがえたとき：ブブー・「ちがうよ！」・ゆれる・連続正解を0に ---
+function handleWrong(elementId, expectedAction) {
+    playSound('wrong');
+    const popup = document.getElementById('popup');
+    popup.classList.add('show');
+    setTimeout(() => popup.classList.remove('show'), 1000);
+
+    // ヒントの光をクリア（誤タップ時に残らないように）
+    document.querySelectorAll('.hint-glow').forEach(el => el.classList.remove('hint-glow'));
+
+    // エラー記録とコンボリセット
+    if (chal.on) { chal.miss++; chal.missNow++; }   // 10問チャレンジの記録
+    comboCount = 0;
+    document.getElementById('combo-count').innerText = comboCount;
+    const s = states[state];
+    if (s) {
+        // actionボタン誤押下時は、本来押すべき行為（s.expect）で分類
+        if (s.type === 'action' && s.expect && errorStats[s.expect] !== undefined) {
+            errorStats[s.expect]++;
+        }
+        // 商を立てる位置を選ぶステップ（click_cell）はたてるに分類
+        else if (s.type === 'click_cell') {
+            errorStats.tateru++;
+        }
+        // それ以外は指示文のキーワードで分類
+        else if (s.text.includes("たて")) errorStats.tateru++;
+        else if (s.text.includes("かけ")) errorStats.kakeru++;
+        else if (s.text.includes("ひき")) errorStats.hiku++;
+        else if (s.text.includes("おろ")) errorStats.orosu++;
+        else errorStats.other++;
+    }
+
+    if (elementId) {
+        const el = document.getElementById(elementId);
+        if (el) {
+            el.classList.remove('shake');
+            void el.offsetWidth; // reflow
+            el.classList.add('shake');
+        }
+    }
+}
+
+// ===== 10問チャレンジ =====
+// どのタブでも使える。10問おわると、ノーミスの数・まちがえた回数・かかった時間を出す。
+let chal = { on: false, total: 10, no: 0, miss: 0, missNow: 0, perfect: 0, t0: 0 };
+
+function chalUpdateBar() {
+    document.getElementById('btn-challenge').classList.toggle('on', chal.on);
+    document.getElementById('chal-bar').style.display = chal.on ? 'flex' : 'none';
+    if (!chal.on) return;
+    let dots = '';
+    for (let i = 0; i < chal.total; i++) dots += (i < chal.no) ? '●' : '○';
+    document.getElementById('chal-dots').innerText = dots;
+    document.getElementById('chal-count').innerText = `${Math.min(chal.no + 1, chal.total)}問め / ${chal.total}`;
+}
+
+function chalReset() {          // はじめから数えなおす
+    chal.no = 0; chal.miss = 0; chal.missNow = 0; chal.perfect = 0; chal.t0 = Date.now();
+    document.getElementById('chal-result').classList.remove('show');
+    chalUpdateBar();
+}
+
+function chalDone() {           // 1問おわったときに呼ぶ
+    if (!chal.on) return;
+    if (chal.missNow === 0) chal.perfect++;
+    chal.no++;
+    chalUpdateBar();
+    if (chal.no < chal.total) {
+        setTimeout(() => { if (chal.on) initGame(); }, 1800);   // つぎの問題へ
+        return;
+    }
+    const sec = Math.floor((Date.now() - chal.t0) / 1000);
+    const msg = (chal.perfect === chal.total) ? 'ぜんぶノーミス！ すばらしい！'
+              : (chal.perfect >= chal.total - 2) ? 'よくがんばりました！'
+              : 'つぎは もっとできる！';
+    setTimeout(() => {
+        document.getElementById('chal-lines').innerHTML =
+            `<div>ノーミスでできた問題　<b>${chal.perfect}</b> / ${chal.total}</div>` +
+            `<div>まちがえた回数　<b>${chal.miss}</b> 回</div>` +
+            `<div>かかった時間　<b>${Math.floor(sec / 60)}</b> 分 <b>${sec % 60}</b> 秒</div>` +
+            `<div class="chal-msg">${msg}</div>`;
+        document.getElementById('chal-result').classList.add('show');
+    }, 1500);
+}
+
+document.getElementById('btn-challenge').addEventListener('click', () => {
+    chal.on = !chal.on;
+    playSound('click');
+    chalReset();
+    initGame();
+});
+document.getElementById('btn-chal-again').addEventListener('click', () => { chalReset(); initGame(); });
+document.getElementById('btn-chal-quit').addEventListener('click', () => { chal.on = false; chalReset(); initGame(); });
+
+let nextTimers = [];   // はなまるの あと 次の問題へ 進む タイマー
+
+// --- 正解して1問おわったとき：はなまる・ピンポン・紙吹雪・時間とアドバイス・連続正解 ---
+function showClearEffect() {
+    document.getElementById('hanamaru').classList.add('show');
+    playSound('correct');
+
+    if (typeof confetti !== 'undefined') {
+        confetti({
+            particleCount: 150,
+            spread: 80,
+            origin: { y: 0.6 },
+            colors: ['#ffeb3b', '#ff9800', '#4caf50', '#00bcd4', '#e91e63']
+        });
+    }
+
+    // タイム測定、アドバイス、コンボ
+    const timeTaken = Math.floor((Date.now() - startTime) / 1000);
+    let advice = "";
+    let maxError = 0;
+    let worstType = "";
+    for (const [key, val] of Object.entries(errorStats)) {
+        if (val > maxError) {
+            maxError = val;
+            worstType = key;
+        }
+    }
+
+    if (maxError > 0) {
+        if (worstType === 'tateru') advice = "「たてる」をもう少しがんばろう！";
+        else if (worstType === 'kakeru') advice = "「かける」の計算に気をつけよう！";
+        else if (worstType === 'hiku') advice = "「ひき算」をていねいにやろう！";
+        else if (worstType === 'orosu') advice = "「おろす」場所をたしかめよう！";
+        else advice = "つぎはノーミスをめざそう！";
+    } else {
+        advice = "かんぺき！すばらしい！";
+    }
+
+    comboCount++;
+    document.getElementById('combo-count').innerText = comboCount;
+    const comboSpan = document.getElementById('combo-count');
+    comboSpan.style.transform = 'scale(1.5)';
+    setTimeout(() => comboSpan.style.transform = 'scale(1)', 300);
+
+    setTimeout(() => {
+        document.getElementById('instruction').innerHTML = `${answerText()}<br><span style="font-size: 1rem; color: #d32f2f;">🕒 ${timeTaken}秒！ ${advice}</span>`;
+    }, 500);
+
+    // ふつうのとき：はなまるを1秒で消して、その1秒後に次の問題（10問チャレンジ・テストの練習は それぞれの しくみで進む）
+    if (!chal.on && !(window.TestRun && TestRun.on())) {
+        nextTimers.push(setTimeout(() => document.getElementById('hanamaru').classList.remove('show'), 1000));
+        nextTimers.push(setTimeout(initGame, 2000));
+    }
+
+    chalDone();   // 10問チャレンジ中なら、1問すすめる
+}
+
+// --- イベントリスナー ---
+// たてる・かける・ひく・おろす
+['tateru', 'kakeru', 'hiku', 'orosu'].forEach(action => {
+    document.getElementById(`btn-${action}`).addEventListener('click', () => {
+        const s = states[state];
+        if (s.type === 'wait') return; // 演出中は操作を無視
+        if (s.type === 'action' && s.expect === action) {
+            playSound('click');
+            state++;
+            updateUI();
+        } else {
+            handleWrong(`btn-${action}`);
+        }
+    });
+});
+
+// マスをタップ
+document.querySelectorAll('.cell').forEach(cell => {
+    cell.addEventListener('click', () => {
+        const s = states[state];
+        const cellId = cell.id.replace('cell-', '');
+
+        if (s.type === 'click_cell') {
+            if (cellId === s.expect) {
+                playSound('click');
+                state++;
+                updateUI();
+            } else {
+                handleWrong(cell.id);
+            }
+        } else if (s.type === 'click_cells') {
+            if (!s.expect.includes(cellId)) {
+                handleWrong(cell.id);
+                return;
+            }
+            if (!selectedCells.includes(cellId)) {
+                selectedCells.push(cellId);
+                cell.classList.add('selected');
+                playSound('click');
+            }
+            if (s.expect.every(id => selectedCells.includes(id))) {
+                const cur = state;
+                setTimeout(() => {
+                    if (state !== cur) return; // すでに次へ進んでいたら二重に進めない
+                    state++;
+                    updateUI();
+                }, 300);
+            }
+        } else if (s.type === 'click_cells_group') {
+            const allValid = s.expectGroups.flat();
+            if (!allValid.includes(cellId)) {
+                handleWrong(cell.id);
+                return;
+            }
+
+            const targetGroup = s.expectGroups.find(group => group.includes(cellId));
+            const validCells = targetGroup.filter(id => {
+                const el = document.getElementById(`cell-${id}`);
+                const text = el.textContent || el.innerText || '';
+                return text.trim() !== '';
+            });
+
+            let isNewSelection = false;
+
+            validCells.forEach(id => {
+                if (!selectedCells.includes(id)) {
+                    selectedCells.push(id);
+                    isNewSelection = true;
+                }
+            });
+
+            if (isNewSelection) {
+                playSound('click');
+                if (validCells.length === 1) {
+                    document.getElementById(`cell-${validCells[0]}`).classList.add('selected');
+                } else if (validCells.length >= 2) {
+                    // 左端→中央→右端でカプセル型の選択マークを作る
+                    validCells.forEach((id, i) => {
+                        const cls = i === 0 ? 'selected-group-left'
+                                  : i === validCells.length - 1 ? 'selected-group-right'
+                                  : 'selected-group-mid';
+                        document.getElementById(`cell-${id}`).classList.add(cls);
+                    });
+                }
+            }
+
+            const isCorrect = s.expectGroups.every(group => {
+                const groupValidCells = group.filter(id => {
+                    const el = document.getElementById(`cell-${id}`);
+                    const text = el.textContent || el.innerText || '';
+                    return text.trim() !== '';
+                });
+                if (groupValidCells.length === 0) return true;
+                return groupValidCells.every(id => selectedCells.includes(id));
+            });
+
+            if (isCorrect) {
+                const cur = state;
+                setTimeout(() => {
+                    if (state !== cur) return; // すでに次へ進んでいたら二重に進めない
+                    state++;
+                    updateUI();
+                }, 300);
+            }
+        }
+    });
+});
+
+// テンキー
+document.querySelectorAll('.num-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const s = states[state];
+        // 文字と式：入れた文字が、正解の式の どれかの 頭と 合っていれば 進む
+        if (s.type === 'expr') {
+            const cand = mojiLay.typed[s.line] + btn.dataset.val;
+            if (s.answers.some(a => a.startsWith(cand))) {
+                playSound('click');
+                mojiLay.typed[s.line] = cand;
+                if (s.answers.includes(cand)) state++;
+                updateUI();
+            } else {
+                handleWrong('numpad');
+            }
+            return;
+        }
+        if (s.type === 'input') {
+            const raw = btn.dataset.val;
+            // 数字は数として、小数点や ×÷＋− は文字のまま持つ
+            const val = /^[0-9]$/.test(raw) ? parseInt(raw, 10) : raw;
+            const write = v => {
+                const el = document.getElementById(`cell-${s.targetCell}`);
+                if (el) el.innerText = v;
+            };
+            if (val === s.expect()) {
+                playSound('click');
+                write(val);
+                // next が指定されていればそこへ（手順を飛ばしたいとき）
+                state = (s.next !== undefined) ? s.next : state + 1;
+                updateUI();
+            } else if (s.altExpect && val === s.altExpect()) {
+                // 別解 → 指定の手順へ
+                playSound('click');
+                write(val);
+                state = s.altNext;
+                updateUI();
+            } else if (Array.isArray(s.alts) && s.alts.some(a => val === a.expect())) {
+                // 別解（複数）
+                const hit = s.alts.find(a => val === a.expect());
+                playSound('click');
+                write(val);
+                state = hit.next;
+                updateUI();
+            } else {
+                handleWrong('numpad');
+            }
+        }
+    });
+});
+
+// キーボードから入力（画面のテンキーを おしたのと 同じ）
+//   数字・小数点／x y／* × → ×、/ ÷ → ÷、+ → ＋、- → −、= → ＝（全角でも よい）
+const KEY_MAP = { '*': '×', '/': '÷', '+': '＋', '-': '−', '=': '＝', 'X': 'x', 'Y': 'y',
+                  '×': '×', '÷': '÷', '＋': '＋', '－': '−', '−': '−', 'ー': '−', '＝': '＝', '＊': '×', '／': '÷',
+                  'ｘ': 'x', 'ｙ': 'y', 'Ｘ': 'x', 'Ｙ': 'y', '．': '.', '。': '.' };
+document.addEventListener('keydown', e => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+    let k = e.key;
+    if (/^[０-９]$/.test(k)) k = String.fromCharCode(k.charCodeAt(0) - 0xFEE0);
+    k = KEY_MAP[k] || k;
+    const s = states[state];
+    if (!s) return;
+    // 式の x・y を おす 手順では、x・y の キーで おせる
+    if (s.type === 'pick_var' && (k === 'x' || k === 'y')) {
+        const v = document.getElementById('rel-v-' + k);
+        if (v) { e.preventDefault(); v.click(); }
+        return;
+    }
+    const btn = [...document.querySelectorAll('.num-btn')].find(b => b.dataset.val === k);
+    if (!btn) return;
+    const pad = btn.closest('.numpad, .op-pad');
+    if (!pad || !pad.classList.contains('visible') || getComputedStyle(btn).visibility === 'hidden') return;
+    e.preventDefault();
+    btn.classList.add('kb-press');
+    setTimeout(() => btn.classList.remove('kb-press'), 120);
+    btn.click();
+});
+
+// ヒント：いま押すボタン・マス・テンキーの数を光らせる
+document.getElementById('btn-hint').addEventListener('click', () => {
+    const s = states[state];
+    // 文字と式：言葉の式を出して、次に おすキー／カードを光らせる
+    if (isMoji(mode)) {
+        const tape = document.getElementById('moji-tape'), kb1 = document.getElementById('moji-kotoba');
+        if (tape && s.stage === 1 && kb1 && kb1.classList.contains('show')) tape.classList.add('show');   // 文章題：2回めの ヒントで テープ図
+        document.querySelectorAll('#moji-panel .moji-kotoba').forEach(kb => kb.classList.add('show'));
+        if (s.type === 'pick_var') {
+            const v = document.getElementById('rel-v-' + s.expect);
+            if (v) v.classList.add('hint-glow');
+        }
+        if (s.type === 'expr' && mojiLay.lines[s.line].calc) {
+            showHissan(s.line);   // 計算の段：横に筆算を出す
+        } else if (s.type === 'expr') {
+            const typed = mojiLay.typed[s.line];
+            const a = s.answers.find(x => x.startsWith(typed));
+            const key = a && document.querySelector(`.num-btn[data-val="${a[typed.length]}"]`);
+            if (key) key.classList.add('hint-glow');
+        } else if (s.type === 'choice' && mojiLay.unit) {
+            document.getElementById('moji-panel').classList.add('show-unit');   // 場面をえらぶ・式をえらぶ：単位を ぜんぶ ◯で かこむ
+        } else if (s.type === 'choice' && mojiLay.glow) {
+            const el = document.getElementById((mojiLay.cards ? 'bamen-c' : 'bamen-o') + s.expect);
+            if (el) el.classList.add('hint-glow');
+        }
+        return;
+    }
+    if (s.type === 'action') {
+        document.getElementById(`btn-${s.expect}`).classList.add('hint-glow');
+    } else if (s.type === 'click_cell') {
+        document.getElementById(`cell-${s.expect}`).classList.add('hint-glow');
+    } else if (s.type === 'click_cells') {
+        s.expect.forEach(id => {
+            if (!selectedCells.includes(id)) {
+                document.getElementById(`cell-${id}`).classList.add('hint-glow');
+            }
+        });
+    } else if (s.type === 'click_cells_group') {
+        s.expectGroups.flat().forEach(id => {
+            if (!selectedCells.includes(id)) {
+                document.getElementById(`cell-${id}`).classList.add('hint-glow');
+            }
+        });
+    } else if (s.type === 'input') {
+        const key = document.querySelector(`.num-btn[data-val="${s.expect()}"]`);
+        if (key) key.classList.add('hint-glow');
+        const cell = document.getElementById(`cell-${s.targetCell}`);
+        const box = cell && cell.querySelector('.box-input');
+        if (box) box.classList.add('hint-glow');
+    } else if (s.type === 'drag_drop') {
+        document.getElementById('drag-target-span').classList.add('hint-glow');
+        document.getElementById(`cell-${s.target}`).classList.add('hint-glow');
+    }
+});
+
+// 文字と式：カード・式のボタンをえらぶ
+document.getElementById('moji-panel').addEventListener('click', e => {
+    const v = e.target.closest('[data-var]');
+    if (v) {
+        const s = states[state];
+        if (s.type !== 'pick_var') return;
+        if (v.dataset.var === s.expect) { playSound('click'); state++; updateUI(); }
+        else handleWrong(v.id);
+        return;
+    }
+    const b = e.target.closest('[data-choice]');
+    if (!b || b.classList.contains('done')) return;
+    const s = states[state];
+    if (s.type !== 'choice') return;
+    if (+b.dataset.choice === s.expect) {
+        playSound('click');
+        state++;
+        updateUI();
+    } else {
+        handleWrong(b.id);
+    }
+});
+
+// もう一度（＝新しい問題）
+document.getElementById('btn-reset').addEventListener('click', initGame);
+
+// 上のタブ
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const wrap = GROUP_SUB[btn.dataset.group];
+        if (wrap) {
+            // いま選ばれている小タブの見本問題から始める
+            const sub = document.querySelector(`#${wrap} .level-btn.active`)
+                     || document.querySelector(`#${wrap} .level-btn`);
+            currentMode = sub.dataset.mode;
+        } else {
+            currentMode = btn.dataset.mode;
+        }
+        forceProblem = TAB_PROBLEM[currentMode] || null;
+        if (chal.on) chalReset();   // タブを変えたら、10問チャレンジは最初から
+        initGame();
+    });
+});
+
+// 小タブ
+Object.values(GROUP_SUB).forEach(id => {
+    document.querySelectorAll(`#${id} .level-btn`).forEach(btn => {
+        btn.addEventListener('click', () => {
+            btn.parentElement.querySelectorAll('.level-btn').forEach(b => b.classList.toggle('active', b === btn));
+            currentMode = btn.dataset.mode;
+            forceProblem = TAB_PROBLEM[currentMode] || null;   // 最初の1問は見本問題
+            playSound('click');
+            if (chal.on) chalReset();                          // 小タブを変えたら、10問チャレンジは最初から
+            initGame();
+        });
+    });
+});
+
+// =====================================================================
+// 1問はじめる（タブ・小タブ・もう一度・10問チャレンジの次の問題・テストの練習 から呼ばれる）
+// =====================================================================
+function initGame() {
+    nextTimers.forEach(clearTimeout);   // 自動で 次へ 進む 予定を 取り消す（先に 次の問題・タブを おしたとき）
+    nextTimers = [];
+    mode = currentMode;
+    chal.missNow = 0;   // 10問チャレンジ：この問題でまちがえた回数
+    // いまのモードの小タブだけ出す
+    Object.values(GROUP_SUB).forEach(id => {
+        const w = document.getElementById(id);
+        w.style.display = w.querySelector(`.level-btn[data-mode="${mode}"]`) ? 'flex' : 'none';
+    });
+    generateProblem();
+    forceProblem = null;   // 見本問題は1回だけ
+    generateStates();
+    state = 0;
+    selectedCells = [];
+
+    startTime = Date.now();
+    errorStats = { tateru: 0, kakeru: 0, hiku: 0, orosu: 0, other: 0 };
+    document.querySelectorAll('.guide-arrow').forEach(el => el.remove());
+
+    // UIリセット
+    document.querySelectorAll('.cell').forEach(cell => {
+        cell.innerText = '';
+        cell.innerHTML = '';
+        cell.className = 'cell';
+    });
+    document.getElementById('hanamaru').classList.remove('show');
+
+    // 計算タブ：マスの代わりに式の板を出して、ここで終わり
+    const kei = isKei(mode);
+    const moji = isMoji(mode);
+    document.querySelector('.grid').style.display = (kei || moji) ? 'none' : 'grid';
+    document.getElementById('kei-panel').style.display = kei ? 'flex' : 'none';
+    document.getElementById('moji-panel').style.display = moji ? 'flex' : 'none';
+    document.querySelector('.controls').classList.toggle('kei-mode', kei || moji);
+    if (moji) {
+        document.getElementById('moji-panel').dataset.g = mode.replace(/\d+$/, '');   // タブごとの つめ方（CSS）
+        renderMoji();
+        updateUI();
+        return;
+    }
+    if (kei) {
+        renderKeiBoxes();
+        updateUI();
+        return;
+    }
+
+    // わり算の筆算：罫線（商の上線・ひき算の線。ひき算の線は border-hidden でかくしておく）
+    if (mode === '3digit1') {
+        [3, 4, 5].forEach(c => document.getElementById(`cell-r0-c${c}`).classList.add('border-bottom'));
+        [3, 4].forEach(c => {
+            document.getElementById(`cell-r2-c${c}`).classList.add('border-bottom', 'border-hidden');
+            document.getElementById(`cell-r4-c${c}`).classList.add('border-bottom', 'border-hidden');
+        });
+        [4, 5].forEach(c => document.getElementById(`cell-r6-c${c}`).classList.add('border-bottom', 'border-hidden'));
+    } else if (mode === '3digit2') {
+        [3, 4, 5].forEach(c => document.getElementById(`cell-r0-c${c}`).classList.add('border-bottom'));
+        [3, 4].forEach(c => document.getElementById(`cell-r2-c${c}`).classList.add('border-bottom', 'border-hidden'));
+        [4, 5].forEach(c => document.getElementById(`cell-r4-c${c}`).classList.add('border-bottom', 'border-hidden'));
+    } else {
+        [3, 4].forEach(c => document.getElementById(`cell-r0-c${c}`).classList.add('border-bottom'));
+        [3, 4].forEach(c => {
+            document.getElementById(`cell-r2-c${c}`).classList.add('border-bottom', 'border-hidden');
+            document.getElementById(`cell-r4-c${c}`).classList.add('border-bottom', 'border-hidden');
+        });
+    }
+
+    // 「）」：わられる数が始まるセルの左端
+    document.getElementById('cell-r1-c3').classList.add('paren-left');
+
+    // 問題のセット：わる数 c2 ／ わられる数 c3から右へ
+    document.getElementById('cell-r1-c2').innerText = divisor;
+    if (mode !== '2digit') {
+        document.getElementById('cell-r1-c3').innerText = Math.floor(dividend / 100);
+        document.getElementById('cell-r1-c4').innerText = Math.floor((dividend % 100) / 10);
+        document.getElementById('cell-r1-c5').innerText = dividend % 10;
+    } else {
+        document.getElementById('cell-r1-c3').innerText = Math.floor(dividend / 10);
+        document.getElementById('cell-r1-c4').innerText = dividend % 10;
+    }
+
+    updateUI();
+}
+
+// 起動：最初の1問も見本問題から
+forceProblem = TAB_PROBLEM[currentMode] || null;
+window.onload = () => { initGame(); };
+</script>
+
+<!-- ============================================================
+     📝 テストの 練習 ⓪つなぎ（このアプリ用）
+     ②しくみ が使う MODES・setMode・showHanamaru・applyJudge を、ここで用意する。
+     ・本体の showClearEffect（はなまる）と handleWrong（まちがい）を 外から つつむ。
+     ============================================================ -->
+<script>
+/* 小タブの 一覧（タブの ボタンから 作る）*/
+const MODES = {};
+document.querySelectorAll('#mode-tabs .tab-btn').forEach(tab => {
+  const label = tab.textContent.trim();
+  if (tab.dataset.mode) { MODES[tab.dataset.mode] = { label: label }; return; }
+  const wrap = document.getElementById(GROUP_SUB[tab.dataset.group]);
+  if (!wrap) return;
+  wrap.querySelectorAll('.level-btn[data-mode]').forEach(b => {
+    MODES[b.dataset.mode] = { label: label, sub: '（' + b.textContent.trim() + '）' };
+  });
+});
+
+/* 小タブを 開く（タブを おしたのと 同じ 見た目に して、新しい 問題を 出す）*/
+function setMode(name) {
+  const sub = document.querySelector('.level-wrap .level-btn[data-mode="' + name + '"]');
+  let tab = null;
+  if (sub) {
+    sub.parentElement.querySelectorAll('.level-btn').forEach(b => b.classList.toggle('active', b === sub));
+    const g = Object.keys(GROUP_SUB).find(k => GROUP_SUB[k] === sub.parentElement.id);
+    tab = document.querySelector('#mode-tabs .tab-btn[data-group="' + g + '"]');
+  } else {
+    tab = document.querySelector('#mode-tabs .tab-btn[data-mode="' + name + '"]');
+  }
+  document.querySelectorAll('#mode-tabs .tab-btn').forEach(b => b.classList.toggle('active', b === tab));
+  currentMode = name;
+  forceProblem = window.TEST_MIHON ? (TAB_PROBLEM[name] || null) : null;   // テストでは ふつう ランダムの 問題
+  initGame();
+}
+
+/* はなまる・まちがいの 知らせ口 */
+function showHanamaru() { if (window.TestRun && TestRun.on()) TestRun.onDone(); }
+function applyJudge(r)  { if (window.TestRun && r && !r.ok && !r.skip) TestRun.miss(); }
+
+/* 本体の はなまる・まちがいを つつんで、上の 知らせ口を よぶ */
+{
+  const _clear = showClearEffect;
+  showClearEffect = function () { const v = _clear.apply(this, arguments); showHanamaru(); return v; };
+  const _wrong = handleWrong;
+  handleWrong = function () { applyJudge({ ok: false }); return _wrong.apply(this, arguments); };
+}
+
+/* 10問チャレンジ：テストを 始めるとき オンなら 切る */
+window.Challenge10 = { isOn: () => chal.on };
+
+/* ②が 作った 帯に「とばす」ボタンを 足す／文字を このアプリの 丸ゴシックに そろえる */
+document.addEventListener('DOMContentLoaded', () => {
+  const stop = document.getElementById('test-stop');
+  if (stop && !document.getElementById('test-skip')) {
+    const b = document.createElement('button');
+    b.id = 'test-skip'; b.type = 'button'; b.textContent = 'とばす';
+    stop.parentNode.insertBefore(b, stop);
+  }
+  const css = document.createElement('style');
+  css.textContent =
+    '#test-mount button,#test-bar,#test-result .tr-card,#test-result button{font-family:"M PLUS Rounded 1c",sans-serif !important;font-weight:700;}' +
+    '#test-btn{font-size:1.05rem !important;}' +
+    '#test-skip{font-size:.9em;padding:3px 10px;border-radius:14px;border:2px solid #7fd3c6;background:#e3f6f2;color:#138577;cursor:pointer;}' +
+    'body.testing #btn-challenge,body.testing #chal-bar{display:none !important;}';
+  document.head.appendChild(css);
+});
+</script>
+
+<!-- ============================================================
+     📝 テストの 練習 ①せってい（アプリごとに 書きかえる）
+     mode は 小タブの data-mode。1つの 大問 ＝ 1問（はなまるが 出たら つぎの 大問へ）
+     ============================================================ -->
+<script>
+window.TEST_MIHON = false;   // true に すると、各大問の 問題が タブの 見本問題（TAB_PROBLEM）に なる
+window.TEST_SETTEI = {
+  button: '📝 テストの 練習',
+  tests: [
+    { title:'文字と式の テスト', items:[
+      { no:'大問1', mode:'shiki1', name:'xを使った式' },
+      { no:'大問2', mode:'atai1',  name:'yの値を求める' },
+      { no:'大問3', mode:'atai2',  name:'xの値を求める' },
+      { no:'大問4', mode:'shiki2', name:'xとyの関係' },
+      { no:'大問5', mode:'toku1',  name:'代金を求める' },
+      { no:'大問6', mode:'toku2',  name:'1つ分を求める' },
+      { no:'大問7', mode:'bamen1', name:'場面をえらぶ' } ] }
+  ],
+  parts: { after:'#chal-bar', next:'#test-skip', hint:'#btn-hint', tabs:'#mode-tabs,.level-wrap', chalBtn:'#btn-challenge' }
+};
+</script>
+
+<!-- ============================================================
+     📝 テストの 練習 ②しくみ（test_renshu v1・2026-09-26）— さわらない
+     shukuzu1.html の B1 を、ほかの アプリでも つかえるように 取り出したもの。
+     ・showHanamaru と applyJudge を 外から つつんで（ラップして）つかう。
+     ・土台に もう「window.TestRun」の 2行が 入っている ときは つつまない（二重に 数えない）。
+     ・10問チャレンジ（Challenge10）とは べつの しくみ。始めると チャレンジは 切る。
+     ============================================================ -->
+<script>
+window.TestRun = (function(){
+  'use strict';
+  const S = window.TEST_SETTEI;
+  const P = Object.assign({ after:'#chal-mount', next:'#next', hint:'#hintBtn',
+                            tabs:'#gtabs,#subTabs', chalBtn:'#btn-challenge' }, (S && S.parts) || {});
+  const $ = id => document.getElementById(id);
+  const q = sel => sel ? document.querySelector(sel) : null;
+
+  /* ---- 土台に 必要な ものが あるか ---- */
+  const lack = [];
+  if(typeof MODES        !== 'object')   lack.push('MODES');
+  if(typeof setMode      !== 'function') lack.push('setMode');
+  if(typeof showHanamaru !== 'function') lack.push('showHanamaru');
+  if(typeof applyJudge   !== 'function') lack.push('applyJudge');
+  if(!S || !Array.isArray(S.tests) || !S.tests.length) lack.push('TEST_SETTEI.tests');
+  if(lack.length){ console.warn('テストの練習：土台に ないので うごきません →', lack.join('・')); return null; }
+
+  /* ---- せっていを たしかめる（ない 小タブは とばす）---- */
+  const TESTS = S.tests.map(t => ({
+    title: t.title || 'テスト',
+    items: (t.items || []).filter(it => {
+      if(it && MODES[it.mode]) return true;
+      console.warn('テストの練習：小タブ「' + (it && it.mode) + '」が ないので とばします（' + t.title + '）');
+      return false;
+    })
+  })).filter(t => t.items.length);
+  if(!TESTS.length){ console.warn('テストの練習：出せる 大問が ありません'); return null; }
+
+  const setOf = it => Object.assign({}, it.meth !== undefined ? { meth: it.meth } : {}, it.set || {});
+  const itemName = it => it.name || ((MODES[it.mode].label || it.mode) + (MODES[it.mode].sub || ''));
+  const nowMode = () => (typeof mode === 'string' ? mode : '');
+  const waitMs = () => (typeof HANAMARU_SHOW_MS === 'number' ? HANAMARU_SHOW_MS : 2000)
+                     + (typeof AUTO_NEXT_MS     === 'number' ? AUTO_NEXT_MS     : 1500);
+
+  let run = null;   // { t, i, rec:[{miss,hint,st}], back, saved }
+  let myTimer = 0;
+
+  /* ---- 見た目（CSS は ここで 足す。土台の <style> は さわらない）---- */
+  const css = document.createElement('style');
+  css.id = 'test-style';
+  css.textContent = [
+    '#test-mount{position:relative;flex:0 0 auto;display:flex;align-items:center;}',
+    '#test-btn{font-family:"Yusei Magic",sans-serif;font-size:clamp(13px,1.7vw,17px);padding:5px 14px;white-space:nowrap;',
+    '  color:#138577;background:#e3f6f2;border:2px solid #7fd3c6;border-radius:20px;box-shadow:0 2px 0 #7fd3c6;cursor:pointer;}',
+    '#test-btn:focus-visible,#test-menu button:focus-visible,#test-bar button:focus-visible,#test-result button:focus-visible{outline:3px solid #138577;outline-offset:2px;}',
+    '#test-menu{display:none;position:absolute;top:calc(100% + 8px);right:0;z-index:950;background:#fff;border:3px solid #d8ccae;',
+    '  border-radius:16px;padding:10px;box-shadow:0 8px 24px rgba(52,70,95,.20);flex-direction:column;gap:8px;min-width:270px;max-width:92vw;}',
+    '#test-menu.open{display:flex;}',
+    '#test-menu button{font-family:"Yusei Magic",sans-serif;font-size:17px;padding:11px 14px;border-radius:12px;border:3px solid #7fd3c6;',
+    '  background:#fff;color:#34465f;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:14px;white-space:nowrap;}',
+    '#test-menu button:hover{background:#f1fbf9;}',
+    '#test-menu small{font-size:14px;color:#6a7d96;}',
+    '#test-bar{display:none;align-items:center;gap:8px;background:rgba(255,255,255,.94);border:2px solid #7fd3c6;border-radius:20px;',
+    '  padding:3px 5px 3px 12px;font-family:"Yusei Magic",sans-serif;color:#138577;white-space:nowrap;font-size:clamp(12px,1.5vw,16px);}',
+    '#test-dots{letter-spacing:1px;}',
+    '#test-stop{font-family:"Yusei Magic",sans-serif;font-size:.9em;padding:3px 10px;border-radius:14px;border:2px solid #d8ccae;background:#fff;color:#6a7d96;cursor:pointer;}',
+    'body.testing #test-btn{display:none;}',
+    'body.testing #test-bar{display:flex;}',
+    'body.testing #chal-mount{display:none;}',
+    P.tabs.split(',').map(s => 'body.testing ' + s.trim()).join(',') + '{pointer-events:none;opacity:.45;}',
+    '#test-result{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;}',
+    '#test-result.show{display:flex;}',
+    '#test-result .tr-card{background:#fff;border-radius:20px;padding:22px 26px;box-shadow:0 10px 40px rgba(0,0,0,.3);max-width:94vw;max-height:92vh;overflow:auto;',
+    '  font-family:"Yusei Magic",sans-serif;color:#34465f;}',
+    '#test-result .tr-title{font-size:clamp(20px,3vw,28px);color:#138577;text-align:center;margin-bottom:12px;}',
+    '#test-result table{border-collapse:collapse;font-size:clamp(14px,2vw,19px);margin:0 auto;}',
+    '#test-result td{padding:6px 10px;border-bottom:2px dashed #eadfc6;white-space:nowrap;}',
+    '#test-result td.no{color:#6a7d96;}',
+    '#test-result td.r-ok{color:#2bb673;}',
+    '#test-result td.r-ng{color:#e85d3b;}',
+    '#test-result td.r-sk{color:#9aa6b5;}',
+    '#test-result .tr-sum{text-align:center;margin-top:12px;font-size:clamp(16px,2.4vw,22px);}',
+    '#test-result .tr-sum b{color:#e85d3b;font-size:1.3em;}',
+    '#test-result .tr-btns{display:flex;gap:12px;justify-content:center;margin-top:16px;}',
+    '#test-result button{font-family:"Yusei Magic",sans-serif;font-size:18px;padding:11px 20px;border-radius:14px;cursor:pointer;}',
+    '#test-again{color:#fff;background:#1fae9c;border:none;box-shadow:0 3px 0 #138577;}',
+    '#test-close{color:#6a7d96;background:#fff;border:2px solid #d8ccae;}'
+  ].join('\n');
+  document.head.appendChild(css);
+
+  /* ---- ボタン・メニュー・帯（10問チャレンジの となり）---- */
+  const mount = document.createElement('div');
+  mount.id = 'test-mount';
+  mount.innerHTML =
+      '<button id="test-btn" type="button">' + (S.button || '📝 テストの 練習') + '</button>'
+    + '<div id="test-menu">'
+    +   TESTS.map((t,k) => '<button type="button" data-k="'+k+'">'+t.title+'<small>'+t.items.length+'問</small></button>').join('')
+    + '</div>'
+    + '<div id="test-bar"><span id="test-no"></span><span id="test-dots"></span>'
+    +   '<button id="test-stop" type="button">やめる</button></div>';
+  const anchor = q(P.after);
+  const header = document.querySelector('header');
+  if(anchor && anchor.parentNode) anchor.parentNode.insertBefore(mount, anchor.nextSibling);
+  else if(header) header.appendChild(mount);
+  else document.body.insertBefore(mount, document.body.firstChild);
+  const res = document.createElement('div');
+  res.id = 'test-result';
+  document.body.appendChild(res);
+
+  /* テストが 1つだけなら、メニューを 出さずに すぐ 始める */
+  $('test-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    if(TESTS.length === 1){ start(0); return; }
+    const m = $('test-menu');
+    m.classList.toggle('open');
+    if(m.classList.contains('open')) placeMenu();
+  });
+  /* せまい 画面で メニューが 左に はみ出す ときは、画面の 中へ ずらす */
+  function placeMenu(){
+    const m = $('test-menu');
+    m.style.left = ''; m.style.right = '';
+    const r = m.getBoundingClientRect(), mr = mount.getBoundingClientRect();
+    if(r.left < 8){ m.style.right = 'auto'; m.style.left = (8 - mr.left) + 'px'; }
+  }
+  $('test-menu').addEventListener('click', e => {
+    const b = e.target.closest('button[data-k]'); if(!b) return;
+    $('test-menu').classList.remove('open');
+    start(+b.dataset.k);
+  });
+  document.addEventListener('click', e => {
+    if(!e.target.closest('#test-mount')) $('test-menu').classList.remove('open');
+  });
+  document.addEventListener('keydown', e => {
+    if(e.key === 'Escape') $('test-menu').classList.remove('open');
+  });
+  $('test-stop').addEventListener('click', () => stop());
+  /* テストの あいだの「つぎの もんだい」は、その 大問を とばして つぎの 大問へ */
+  document.addEventListener('click', e => {
+    if(!run || !P.next || !e.target.closest(P.next)) return;
+    e.stopPropagation(); e.preventDefault();
+    skip();
+  }, true);
+  /* ヒントを 見たか（ボタンを おした あと hintOn が true なら）*/
+  const hb = q(P.hint);
+  if(hb) hb.addEventListener('click', () => setTimeout(() => {
+    const r = cur();
+    const on = (typeof hintOn === 'boolean') ? hintOn : true;
+    if(r && on && r.st === 'todo') r.hint = true;
+  }, 0));
+
+  /* ---- 土台の 2つの 関数を つつむ（土台に もう 2行 入っていれば つつまない）---- */
+  const BUILTIN = /TestRun/.test(String(showHanamaru)) || /TestRun/.test(String(applyJudge));
+  if(!BUILTIN){
+    const _show = showHanamaru;
+    showHanamaru = function(){
+      if(!run) return _show.apply(this, arguments);
+      /* はなまるは ふつうに 出す。同じ モードの つぎの 問題へは 行かせない（noAutoNext を 一時的に）*/
+      const m = (typeof M === 'object' && M) ? M : null;
+      const had = m && Object.prototype.hasOwnProperty.call(m, 'noAutoNext');
+      const old = m ? m.noAutoNext : undefined;
+      try{ if(m) m.noAutoNext = true; }catch(e){}
+      try{ _show.apply(this, arguments); }
+      finally{ try{ if(m){ if(had) m.noAutoNext = old; else delete m.noAutoNext; } }catch(e){} }
+      api.onDone();
+    };
+    const _judge = applyJudge;
+    applyJudge = function(r){
+      if(run && r && !r.ok && !r.skip) api.miss();
+      return _judge.apply(this, arguments);
+    };
+  }
+
+  /* ---- 中身 ---- */
+  function cur(){ return run ? run.rec[run.i] : null; }
+  function clearMine(){ clearTimeout(myTimer); myTimer = 0; }
+  function bar(){
+    if(!run) return;
+    const T = TESTS[run.t], it = T.items[run.i];
+    $('test-no').textContent = '📝 ' + (/^\d+$/.test(it.no) ? it.no+'問め' : it.no) + '（' + (run.i+1) + '／' + T.items.length + '）';
+    $('test-dots').textContent = run.rec.map((r,i) => r.st==='done' ? '●' : r.st==='skip' ? '－' : (i===run.i ? '◎' : '○')).join('');
+  }
+  /* set で かえる 値を、はじめに 1回だけ おぼえておく */
+  function saveSets(t){
+    const saved = {};
+    TESTS[t].items.forEach(it => {
+      const o = setOf(it), md = MODES[it.mode];
+      Object.keys(o).forEach(k => {
+        const key = it.mode + '\u0000' + k;
+        if(!(key in saved)) saved[key] = { md:md, k:k, had:Object.prototype.hasOwnProperty.call(md,k), v:md[k] };
+      });
+    });
+    return saved;
+  }
+  function restoreSets(saved){
+    Object.keys(saved || {}).forEach(key => {
+      const s = saved[key];
+      try{ if(s.had) s.md[s.k] = s.v; else delete s.md[s.k]; }catch(e){}
+    });
+  }
+  function go(i){
+    clearMine();
+    run.i = i;
+    const it = TESTS[run.t].items[i];
+    const o = setOf(it);
+    Object.keys(o).forEach(k => { try{ MODES[it.mode][k] = o[k]; }catch(e){} });
+    setMode(it.mode);
+    bar();
+  }
+  function start(t){
+    const cb = q(P.chalBtn);
+    if(window.Challenge10 && Challenge10.isOn && Challenge10.isOn() && cb) cb.click();
+    res.classList.remove('show');
+    let back = nowMode();
+    if(run){ back = run.back; restoreSets(run.saved); }
+    run = { t:t, i:0, rec:TESTS[t].items.map(() => ({ miss:0, hint:false, st:'todo' })), back:back, saved:saveSets(t) };
+    document.body.classList.add('testing');
+    go(0);
+  }
+  function next(){
+    if(!run) return;
+    if(run.i + 1 < run.rec.length) go(run.i + 1);
+    else finish();
+  }
+  function skip(){
+    const r = cur(); if(!r) return;
+    if(r.st !== 'done') r.st = 'skip';
+    clearMine();
+    if(typeof clearAutoNext === 'function') clearAutoNext();
+    next();
+  }
+  function finish(){
+    clearMine();
+    const T = TESTS[run.t];
+    let perfect = 0;
+    const rows = T.items.map((it,i) => {
+      const r = run.rec[i];
+      let tx, c;
+      if(r.st==='done' && r.miss===0){ tx = '⭕ ノーミス'; c = 'r-ok'; perfect++; }
+      else if(r.st==='done'){ tx = 'まちがい '+r.miss+'回'; c = 'r-ng'; }
+      else { tx = 'とばした'; c = 'r-sk'; }
+      return '<tr><td class="no">'+it.no+'</td><td>'+itemName(it)+'</td><td class="'+c+'">'+tx+'</td><td>'+(r.hint ? '💡' : '')+'</td></tr>';
+    }).join('');
+    res.innerHTML = '<div class="tr-card">'
+      + '<div class="tr-title">📝 '+T.title+'　おわり！</div>'
+      + '<table>'+rows+'</table>'
+      + '<div class="tr-sum">ノーミスで できた 問題　<b>'+perfect+'</b> ／ '+T.items.length+'</div>'
+      + '<div class="tr-btns"><button id="test-again" type="button">もう一度</button><button id="test-close" type="button">とじる</button></div>'
+      + '</div>';
+    res.classList.add('show');
+    $('test-again').onclick = () => start(run.t);
+    $('test-close').onclick = () => stop();
+    $('test-again').focus();
+  }
+  /* やめる／とじる：set で かえた 値を もどして、はじめの タブへ */
+  function stop(){
+    if(!run) return;
+    const back = run.back, saved = run.saved;
+    run = null;
+    clearMine();
+    res.classList.remove('show');
+    document.body.classList.remove('testing');
+    restoreSets(saved);
+    setMode(back && MODES[back] ? back : TESTS[0].items[0].mode);
+  }
+
+  const api = {
+    on: () => !!run,
+    /* showHanamaru から：その 大問は おわり。はなまるの あと つぎの 大問へ */
+    onDone(){
+      if(!run || res.classList.contains('show')) return !!run;
+      const r = cur(); r.st = 'done';
+      bar();
+      clearMine();
+      const go2 = () => { if(typeof autoTimers !== 'undefined') autoTimers = []; next(); };
+      if(typeof autoTimers !== 'undefined' && Array.isArray(autoTimers)) autoTimers.push(setTimeout(go2, waitMs()));
+      else myTimer = setTimeout(go2, waitMs());
+      return true;
+    },
+    /* applyJudge から：まちがい（skip で ない もの）*/
+    miss(){ const r = cur(); if(r && r.st === 'todo') r.miss++; },
+    /* 外から つかう とき用 */
+    start: t => start(t || 0),
+    stop:  () => stop(),
+    record: () => run ? JSON.parse(JSON.stringify(run.rec)) : null
+  };
+  return api;
+})();
+</script>
+<!-- 📝 テストの 練習 ここまで -->
+</body>
+</html>
